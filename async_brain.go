@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+var debug int32
+
 func _sigmoid_(f float64) float64 {
 	/*
 		// Сигмоидальная переходная функция нейрона
@@ -18,7 +20,7 @@ func _sigmoid_(f float64) float64 {
 		// При аргументе от -7 до 7 сигмоида пробегает от 0.000911 до 0.9990889.
 		// В формуле ( 1 / (1 + expf(T - A * zz)) )    Величина T влияет на смещение результатов сигмоиды по абсциссе. Величина A "сплющивает" или "растягиавет" сигмоиду.
 	*/
-	return (1.0 / (1.0 + math.Exp(-1.0*f)))
+	return (1.0 / (1.0 + math.Exp(-2.7*f)))
 }
 
 /*
@@ -63,71 +65,110 @@ func (N *Neuron) calc() {
 	val = _sigmoid_(val)
 	delta := math.Abs((N.out - val) / N.out)
 	N.out = val
-	//if delta > 0.0001 { // Если значение изменилось не больше, чем на 0.01%, то сигнал не подаем.
-	//if delta > 0.001 { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
-	//if delta > 0.01 { // Если значение изменилось не больше, чем на 1%, то сигнал не подаем.
-	if delta > 0.0001 { // Если значение изменилось не больше, чем на 0.01%, то сигнал не подаем.
-		for _, c := range N.outs {
-			c <- val
-		}
+	//if debug == 1 {
+	//	fmt.Println("Neuron:", N, "returns value:", val)
+	//}
+	if delta > 0.001 { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
 		//FIXME
-		fmt.Println("Neuron:", N, "returns value:", val)
+		//fmt.Println(N.out, ">>", N.outs)
+		for _, c := range N.outs {
+			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of", N.outs)
+			go func(cc chan<- float64, value float64) {
+				fmt.Println("Sending", value, "into", cc)
+				cc <- value
+			}(c, val)
+			//c <- val
+		}
+	} else {
+		fmt.Println("!!!!!!!!!!!!!!! delta is too low.", N.out, "wouldn't be sent to", N.outs)
 	}
 }
 
 func (N *Neuron) listen() {
 	for i, syn := range N.ins {
-		go func(s <-chan float64) {
+		go func(NN *Neuron, n int, s <-chan float64) { //FIXME Поведение отличается в зависимости от того 'go func' или просто 'func'. Видимо, надо разбираться с замыканиями.
+			// Выяснили, что в этой функции использовать 'i' и 'syn' нельзя, а можно только переданные их значения 'n' и 's'.
+			//fmt.Println("###", NN, "START LISTENING [", i, "]", syn, "[", n, "]", s) // видим, что i и n различаются.
 			for {
+				//fmt.Println(NN.ins, "[", n, "]", ">>to>>", NN.outs) // !!!!!!!!!!!!
 				select {
-				case N.in[i] = <-s:
-					N.calc()
+				case NN.in[n] = <-s:
+					//FIXME
+					//if debug == 1 {
+					//	fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
+					//}
+					go NN.calc()
 				}
 			}
-		}(syn)
+		}(N, i, syn)
 	}
 }
 
 func main() {
 	// Building NN
-	n1 := Neuron{
-		make([]<-chan float64, 0, 4),
-		make([]float64, 0, 4),
-		make([]float64, 0, 4),
-		0.0,
-		make([]chan<- float64, 0, 4),
-	}
-	n2 := Neuron{
-		make([]<-chan float64, 0, 4),
-		make([]float64, 0, 4),
-		make([]float64, 0, 4),
-		0.0,
-		make([]chan<- float64, 0, 4),
-	}
+	/*
+		n1 := Neuron{
+			make([]<-chan float64, 0, 4),
+			make([]float64, 0, 4),
+			make([]float64, 0, 4),
+			0.0,
+			make([]chan<- float64, 0, 4),
+		}
+		n2 := Neuron{
+			make([]<-chan float64, 0, 4),
+			make([]float64, 0, 4),
+			make([]float64, 0, 4),
+			0.0,
+			make([]chan<- float64, 0, 4),
+		}
+	*/
+	var N [4]Neuron
 
-	n1.link_with(&n2, 0.9)
-	n2.link_with(&n1, 0.666)
+	N[0].link_with(&N[1], 0.9)
+	//N[0].link_with(&N[2], -0.9)
+	//N[1].link_with(&N[0], 0.666)
+	N[1].link_with(&N[2], 0.666)
+	N[2].link_with(&N[0], 0.55)
+	N[2].link_with(&N[1], -0.7)
+
+	/*
+		N[2].link_with(&N[2], 0.12)
+		N[2].link_with(&N[1], 1.09)
+		N[3].link_with(&N[0], -2.2)
+		N[1].link_with(&N[3], 0.1)
+		N[0].link_with(&N[2], -0.54)
+		N[3].link_with(&N[1], -1.22)
+		N[0].link_with(&N[3], 0.87)
+		N[1].link_with(&N[2], -0.32)
+		N[3].link_with(&N[2], 0.89)
+	*/
 	// End of building NN
 
 	// Запуск
-	n1.outs[0] <- 1.0
+	debug = 1
+	N[0].outs[0] <- 1.0
 
 	// Работа
-	n1.listen()
-	n2.listen()
+	go N[0].listen()
+	go N[1].listen()
+	go N[2].listen()
 	for {
 		//n1.listen()
 		//n2.listen()
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter text: ")
 		text, _ := reader.ReadString('\n')
-		if text[0] == byte("q"[0]) {
+		if text[0] == "q"[0] {
 			return
 		}
 		in_int, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
-			fmt.Println("in_int:", in_int)
-			n1.outs[0] <- in_int
+			fmt.Println("_sigmoid_(", in_int, "):", _sigmoid_(in_int))
+			//FIXME
+			//if in_int == -1 {
+			debug = 1
+			//}
+			N[0].outs[0] <- in_int
 		}
 	}
 }
