@@ -1,5 +1,8 @@
 package main
 
+// Online POC version
+// https://play.golang.org/p/lA0yztEaOP
+
 import (
 	"bufio"
 	"fmt"
@@ -7,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync" // Mutex
 )
 
 var debug int32
@@ -36,9 +40,11 @@ func _sigmoid_(f float64) float64 {
 type Neuron struct {
 	ins    []<-chan float64 // Массив входных каналов нейрона (здесь только указатели на них. Создаёт их выдающий сигнал нейрон).
 	in     []float64        // Кэш значений входных синапсов
+	inmux  sync.Mutex       // Мьютекс для работы с входными значениями
 	weight []float64        // веса. Размерность та же
 	out    float64          // кэш выходного значения
 	outs   []chan<- float64 // Массив каналов. По всем ним передается значение out для разных получателей.
+	outmux sync.Mutex       // Мьютекс для работы с выходными значениями
 	// Канал добавляется, когда другой нейрон запрашивает у этого связь с ним.
 }
 
@@ -72,7 +78,7 @@ func (N *Neuron) calc() {
 		//FIXME
 		//fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
-			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of", N.outs)
+			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- float64, value float64) {
 				fmt.Println("Sending", value, "into", cc)
 				cc <- value
@@ -85,6 +91,8 @@ func (N *Neuron) calc() {
 }
 
 func (N *Neuron) listen() {
+	N.inmux.Lock()
+	defer N.inmux.Unlock()
 	for i, syn := range N.ins {
 		go func(NN *Neuron, n int, s <-chan float64) { //FIXME Поведение отличается в зависимости от того 'go func' или просто 'func'. Видимо, надо разбираться с замыканиями.
 			// Выяснили, что в этой функции использовать 'i' и 'syn' нельзя, а можно только переданные их значения 'n' и 's'.
@@ -124,37 +132,37 @@ func main() {
 	*/
 	var N [4]Neuron
 
-	N[0].link_with(&N[1], 0.9)
-	//N[0].link_with(&N[2], -0.9)
-	//N[1].link_with(&N[0], 0.666)
-	N[1].link_with(&N[2], 0.666)
-	N[2].link_with(&N[0], 0.55)
-	N[2].link_with(&N[1], -0.7)
+	//N[0].link_with(&N[1], 0.9)
+	////N[0].link_with(&N[2], -0.9)
+	////N[1].link_with(&N[0], 0.666)
+	//N[1].link_with(&N[2], 0.666)
+	//N[2].link_with(&N[0], 0.55)
+	//N[2].link_with(&N[1], -0.7)
 
-	/*
-		N[2].link_with(&N[2], 0.12)
-		N[2].link_with(&N[1], 1.09)
-		N[3].link_with(&N[0], -2.2)
-		N[1].link_with(&N[3], 0.1)
-		N[0].link_with(&N[2], -0.54)
-		N[3].link_with(&N[1], -1.22)
-		N[0].link_with(&N[3], 0.87)
-		N[1].link_with(&N[2], -0.32)
-		N[3].link_with(&N[2], 0.89)
-	*/
+	/**/
+	N[2].link_with(&N[2], 0.12)
+	N[2].link_with(&N[1], 1.09)
+	N[3].link_with(&N[0], -2.2)
+	N[1].link_with(&N[3], 0.1)
+	N[0].link_with(&N[2], -0.54)
+	N[3].link_with(&N[1], -1.22)
+	N[0].link_with(&N[3], 0.87)
+	N[1].link_with(&N[2], -0.32)
+	N[3].link_with(&N[2], 0.89)
+	/**/
 	// End of building NN
 
 	// Запуск
 	debug = 1
 	N[0].outs[0] <- 1.0
 
-	// Работа
-	go N[0].listen()
-	go N[1].listen()
-	go N[2].listen()
+	// Работа.
+	// Можно `go N[x].lisen()`. Но и так получаются отдельные треды (запускаются в самой ф-ции listen)
+	N[0].listen()
+	N[1].listen()
+	N[2].listen()
+	N[3].listen()
 	for {
-		//n1.listen()
-		//n2.listen()
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter text: ")
 		text, _ := reader.ReadString('\n')
