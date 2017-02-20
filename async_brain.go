@@ -40,13 +40,20 @@ func _sigmoid_(f float64) float64 {
 type Neuron struct {
 	ins    []<-chan float64 // Массив входных каналов нейрона (здесь только указатели на них. Создаёт их выдающий сигнал нейрон).
 	in     []float64        // Кэш значений входных синапсов
-	inmux  sync.Mutex       // Мьютекс для работы с входными значениями
+	inmux  []sync.Mutex     // Мьютексы для работы с входными значениями в in.
 	weight []float64        // веса. Размерность та же
 	out    float64          // кэш выходного значения
+	outmux sync.Mutex       // Мьютекс для работы с выходным значением в out.
 	outs   []chan<- float64 // Массив каналов. По всем ним передается значение out для разных получателей.
-	outmux sync.Mutex       // Мьютекс для работы с выходными значениями
 	// Канал добавляется, когда другой нейрон запрашивает у этого связь с ним.
 }
+
+/* !!!!!!! inmux: хотел делать мьютексы на каждый отдельный элемент, но в таком случае разные потоки в listen() блокируют все элементы, кроме сработавшего select().
+   Сработавший select() вызвает calc() который также должен пробежаться (на чтение) по всем in[] и по идее должен перед этим возводить мьютексы, которые уже взведены в listen(). Если делать один общий мьютекс на весь in[], то не понятно, как взводить его в мультипоточном select-е и не понятно, можно ли select на все входные каналы сделать однопоточным
+   Пример, который я нашел был именно в отдельных потоах на каждый канал.
+   К слову, у нас на каждый элемент in приходится один пишущий процесс (в listen()) и один или несколько читающих (calc()).
+   Так что, видимо пока придется мириться с тем, что
+*/
 
 func (N *Neuron) make_link() chan float64 {
 	c := make(chan float64, 1)
@@ -60,17 +67,24 @@ func (N *Neuron) make_link() chan float64 {
 func (N *Neuron) link_with(N2 *Neuron, W float64) {
 	N.ins = append(N.ins, N2.make_link())
 	N.in = append(N.in, 0.0)
+	var m sync.Mutex
+	N.inmux = append(N.inmux, m)
+	fmt.Printf("%p\n", N.inmux)
 	N.weight = append(N.weight, W)
 }
 
 func (N *Neuron) calc() {
 	val := 0.0
-	for i, v := range N.in {
-		val += v * N.weight[i]
+	for i, m := range N.inmux {
+		m.Lock() // При включении этого мьютекса у нас идет пересечение с уже включенными мьютексами в listen().
+		val += N.in[i] * N.weight[i]
+		m.Unlock()
 	}
 	val = _sigmoid_(val)
+	N.outmux.Lock()
 	delta := math.Abs((N.out - val) / N.out)
 	N.out = val
+	N.outmux.Unlock()
 	//if debug == 1 {
 	//	fmt.Println("Neuron:", N, "returns value:", val)
 	//}
@@ -91,19 +105,23 @@ func (N *Neuron) calc() {
 }
 
 func (N *Neuron) listen() {
-	N.inmux.Lock()
-	defer N.inmux.Unlock()
+	//N.inmux.Lock()
+	//defer N.inmux.Unlock()
 	for i, syn := range N.ins {
 		go func(NN *Neuron, n int, s <-chan float64) { //FIXME Поведение отличается в зависимости от того 'go func' или просто 'func'. Видимо, надо разбираться с замыканиями.
 			// Выяснили, что в этой функции использовать 'i' и 'syn' нельзя, а можно только переданные их значения 'n' и 's'.
 			//fmt.Println("###", NN, "START LISTENING [", i, "]", syn, "[", n, "]", s) // видим, что i и n различаются.
+			var val float64
 			for {
 				//fmt.Println(NN.ins, "[", n, "]", ">>to>>", NN.outs) // !!!!!!!!!!!!
 				select {
-				case NN.in[n] = <-s:
+				case val = <-s:
+					N.inmux[n].Lock()
+					NN.in[n] = val
+					N.inmux[n].Unlock()
 					//FIXME
 					//if debug == 1 {
-					//	fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
+					//fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
 					//}
 					go NN.calc()
 				}
