@@ -7,10 +7,12 @@ import (
 	"bufio"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync" // Mutex
+	//"time"
 )
 
 var debug int32
@@ -62,25 +64,21 @@ func (N *Neuron) link_with(N2 *Neuron, W float64) {
 	N.in = append(N.in, 0.0)
 	var m sync.Mutex
 	N.inmux = append(N.inmux, m)
-	fmt.Printf("%p\n", N.inmux)
 	N.weight = append(N.weight, W)
 }
 
 func (N *Neuron) calc() {
 	val := 0.0
-	for i, m := range N.inmux {
-		m.Lock() // При включении этого мьютекса у нас идет пересечение с уже включенными мьютексами в listen().
+	for i, _ := range N.inmux {
+		(&(N.inmux[i])).Lock() // При включении этого мьютекса у нас идет пересечение с уже включенными мьютексами в listen().
 		val += N.in[i] * N.weight[i]
-		m.Unlock()
+		(&(N.inmux[i])).Unlock()
 	}
 	val = _sigmoid_(val)
 	N.outmux.Lock()
 	delta := math.Abs((N.out - val) / N.out)
 	N.out = val
 	N.outmux.Unlock()
-	//if debug == 1 {
-	//	fmt.Println("Neuron:", N, "returns value:", val)
-	//}
 	if delta > 0.001 { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
 		//FIXME
 		//fmt.Println(N.out, ">>", N.outs)
@@ -102,8 +100,8 @@ func (N *Neuron) listen() {
 	//defer N.inmux.Unlock()
 	for i, syn := range N.ins {
 		go func(NN *Neuron, n int, s <-chan float64) { //FIXME Поведение отличается в зависимости от того 'go func' или просто 'func'. Видимо, надо разбираться с замыканиями.
-			// Выяснили, что в этой функции использовать 'i' и 'syn' нельзя, а можно только переданные их значения 'n' и 's'.
-			//fmt.Println("###", NN, "START LISTENING [", i, "]", syn, "[", n, "]", s) // видим, что i и n различаются.
+			// Выяснили, что внутри этой функции использовать 'i' и 'syn' нельзя, а можно только переданные их значения 'n' и 's'.
+			//fmt.Println("###", NN, "START LISTENING [", n, "]", s) // видим, что i и n различаются.
 			var val float64
 			for {
 				//fmt.Println(NN.ins, "[", n, "]", ">>to>>", NN.outs) // !!!!!!!!!!!!
@@ -114,7 +112,7 @@ func (N *Neuron) listen() {
 					N.inmux[n].Unlock()
 					//FIXME
 					//if debug == 1 {
-					//fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
+					fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
 					//}
 					go NN.calc()
 				}
@@ -123,56 +121,44 @@ func (N *Neuron) listen() {
 	}
 }
 
+func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
+	var n_neur int = n_in + n_int + n_out
+	r := rand.New(rand.NewSource(111236))
+	N := make([]Neuron, n_in+n_int+n_out)
+	for i, _ := range N[n_in:] { // для всех связанных нейронов
+		n := &N[n_in+i]
+		for i := 0; i <= r.Intn(max_syn); i++ { // Создаем до max_syn рэндомных синапсов.
+			n.link_with(&N[r.Intn(n_neur)], 5.0/float64(r.Intn(5000)))
+		}
+	}
+	return N
+}
+
 func main() {
-	// Building NN
-	/*
-		n1 := Neuron{
-			make([]<-chan float64, 0, 4),
-			make([]float64, 0, 4),
-			make([]float64, 0, 4),
-			0.0,
-			make([]chan<- float64, 0, 4),
-		}
-		n2 := Neuron{
-			make([]<-chan float64, 0, 4),
-			make([]float64, 0, 4),
-			make([]float64, 0, 4),
-			0.0,
-			make([]chan<- float64, 0, 4),
-		}
-	*/
-	var N [4]Neuron
+	var n_in = 3
+	var n_int = 3
+	var n_out = 3
+	var N []Neuron = nn_random_constructor(n_in, n_int, n_out, 5)
+	//In := N[:n_in]
+	//Int := N[n_in : n_in+n_int]
+	//Out := N[n_in+n_int:]
+	Linked := N[n_in:]
 
-	//N[0].link_with(&N[1], 0.9)
-	////N[0].link_with(&N[2], -0.9)
-	////N[1].link_with(&N[0], 0.666)
-	//N[1].link_with(&N[2], 0.666)
-	//N[2].link_with(&N[0], 0.55)
-	//N[2].link_with(&N[1], -0.7)
+	//fmt.Printf("In:\t%p:\t%v\n", In, In)
+	//fmt.Printf("Int:\t%p:\t%v\n", Int, Int)
+	//fmt.Printf("Out:\t%p:\t%v\n\n", Out, Out)
 
-	/**/
-	N[2].link_with(&N[2], 0.12)
-	N[2].link_with(&N[1], 1.09)
-	N[3].link_with(&N[0], -2.2)
-	N[1].link_with(&N[3], 0.1)
-	N[0].link_with(&N[2], -0.54)
-	N[3].link_with(&N[1], -1.22)
-	N[0].link_with(&N[3], 0.87)
-	N[1].link_with(&N[2], -0.32)
-	N[3].link_with(&N[2], 0.89)
-	/**/
-	// End of building NN
+	// Работа.
+	for i, _ := range Linked { // !!! Если делать 'for i,n := range Linked', то в n будет копия.
+		//fmt.Printf("## &n:%p = %v\n## n1:%p = %v\n", &n, n, n1, n1)
+		//fmt.Printf("Linked[%v]: %+v\n", i, n)
+		(&Linked[i]).listen()
+	}
 
 	// Запуск
 	debug = 1
 	N[0].outs[0] <- 1.0
 
-	// Работа.
-	// Можно `go N[x].lisen()`. Но и так получаются отдельные треды (запускаются в самой ф-ции listen)
-	N[0].listen()
-	N[1].listen()
-	N[2].listen()
-	N[3].listen()
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter text: ")
