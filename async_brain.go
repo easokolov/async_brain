@@ -40,13 +40,14 @@ func _sigmoid_(f float64) float64 {
 */
 
 type Neuron struct {
-	ins    []<-chan float64 // Массив входных каналов нейрона (здесь только указатели на них. Создаёт их выдающий сигнал нейрон).
-	in     []float64        // Кэш значений входных синапсов
-	inmux  []sync.Mutex     // Мьютексы для работы с входными значениями в in.
-	weight []float64        // веса. Размерность та же
-	out    float64          // кэш выходного значения
-	outmux sync.Mutex       // Мьютекс для работы с выходным значением в out.
-	outs   []chan<- float64 // Массив каналов. По всем ним передается значение out для разных получателей.
+	ins     []<-chan float64 // Массив входных каналов нейрона (здесь только указатели на них. Создаёт их выдающий сигнал нейрон).
+	in      []float64        // Кэш значений входных синапсов
+	inmux   []sync.Mutex     // Мьютексы для работы с входными значениями в in.
+	weight  []float64        // веса. Размерность та же
+	pre_out float64
+	out     float64          // кэш выходного значения
+	outmux  sync.Mutex       // Мьютекс для работы с выходным значением в out.
+	outs    []chan<- float64 // Массив каналов. По всем ним передается значение out для разных получателей.
 	// Канал добавляется, когда другой нейрон запрашивает у этого связь с ним.
 }
 
@@ -69,6 +70,8 @@ func (N *Neuron) link_with(N2 *Neuron, W float64) {
 
 func (N *Neuron) calc() {
 	val := 0.0
+	delta := 0.0     // дельта между текущим значением нейрона и предыдущим.
+	pre_delta := 0.0 // дельта между текущим значением нейрона и пред-предыдущим (pre_out).
 	for i, _ := range N.inmux {
 		(&(N.inmux[i])).Lock() // При включении этого мьютекса у нас идет пересечение с уже включенными мьютексами в listen().
 		val += N.in[i] * N.weight[i]
@@ -76,22 +79,29 @@ func (N *Neuron) calc() {
 	}
 	val = _sigmoid_(val)
 	N.outmux.Lock()
-	delta := math.Abs((N.out - val) / N.out)
-	N.out = val
+	delta = math.Abs((N.out - val) / N.out)
+	pre_delta = math.Abs((N.pre_out - val) / N.pre_out)
+	//N.out = val // И не сохраняем новое значение val в N.out.
 	N.outmux.Unlock()
-	if delta > 0.001 { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
+	//if (delta > 0.01) && (pre_delta > 0.01) { // Если значение изменилось не больше, чем на 1%, то сигнал не подаем.
+	if (delta > 0.001) && (pre_delta > 0.001) { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
+		N.outmux.Lock()   //
+		N.pre_out = N.out //
+		N.out = val       // И не сохраняем новое значение val в N.out.
+		N.outmux.Unlock() // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
+
 		//FIXME
 		//fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
 			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- float64, value float64) {
-				fmt.Println("Sending", value, "into", cc)
+				//fmt.Println("Sending", value, "into", cc)
 				cc <- value
 			}(c, val)
 			//c <- val
 		}
 	} else {
-		fmt.Println("!!!!!!!!!!!!!!! delta is too low.", N.out, "wouldn't be sent to", N.outs)
+		fmt.Println("!!!!!!!!!!!!!!! delta is too low.", val, "(", N.out, ")", "wouldn't be sent to", N.outs)
 	}
 }
 
@@ -123,12 +133,13 @@ func (N *Neuron) listen() {
 
 func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 	var n_neur int = n_in + n_int + n_out
-	r := rand.New(rand.NewSource(111236))
+	r := rand.New(rand.NewSource(111237))
 	N := make([]Neuron, n_in+n_int+n_out)
 	for i, _ := range N[n_in:] { // для всех связанных нейронов
 		n := &N[n_in+i]
 		for i := 0; i <= r.Intn(max_syn); i++ { // Создаем до max_syn рэндомных синапсов.
-			n.link_with(&N[r.Intn(n_neur)], 5.0/float64(r.Intn(5000)))
+			//n.link_with(&N[r.Intn(n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
+			n.link_with(&N[r.Intn(n_neur)], -3.0+r.Float64()*6.0)
 		}
 	}
 	return N
@@ -138,26 +149,21 @@ func main() {
 	var n_in = 3
 	var n_int = 3
 	var n_out = 3
-	var N []Neuron = nn_random_constructor(n_in, n_int, n_out, 5)
-	//In := N[:n_in]
-	//Int := N[n_in : n_in+n_int]
-	//Out := N[n_in+n_int:]
+	var max_syn = 2
+	var N []Neuron = nn_random_constructor(n_in, n_int, n_out, max_syn)
+	In := N[:n_in]
+	Int := N[n_in : n_in+n_int]
+	Out := N[n_in+n_int:]
 	Linked := N[n_in:]
-
-	//fmt.Printf("In:\t%p:\t%v\n", In, In)
-	//fmt.Printf("Int:\t%p:\t%v\n", Int, Int)
-	//fmt.Printf("Out:\t%p:\t%v\n\n", Out, Out)
 
 	// Работа.
 	for i, _ := range Linked { // !!! Если делать 'for i,n := range Linked', то в n будет копия.
-		//fmt.Printf("## &n:%p = %v\n## n1:%p = %v\n", &n, n, n1, n1)
-		//fmt.Printf("Linked[%v]: %+v\n", i, n)
 		(&Linked[i]).listen()
 	}
 
 	// Запуск
 	debug = 1
-	N[0].outs[0] <- 1.0
+	In[0].outs[0] <- 1.0
 
 	for {
 		reader := bufio.NewReader(os.Stdin)
@@ -166,6 +172,11 @@ func main() {
 		if text[0] == "q"[0] {
 			return
 		}
+		if text[0] == "p"[0] {
+			fmt.Printf("In:\t%p:\t%+v\n", In, In)
+			fmt.Printf("Int:\t%p:\t%+v\n", Int, Int)
+			fmt.Printf("Out:\t%p:\t%+v\n\n", Out, Out)
+		}
 		in_int, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
 			fmt.Println("_sigmoid_(", in_int, "):", _sigmoid_(in_int))
@@ -173,7 +184,7 @@ func main() {
 			//if in_int == -1 {
 			debug = 1
 			//}
-			N[0].outs[0] <- in_int
+			In[0].outs[0] <- in_int
 		}
 	}
 }
