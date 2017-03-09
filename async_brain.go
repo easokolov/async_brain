@@ -122,7 +122,7 @@ func (N *Neuron) listen() {
 					N.inmux[n].Unlock()
 					//FIXME
 					//if debug == 1 {
-					fmt.Println("chanel", s, "gotcha in select. n =", n, "Value received:", NN.in[n])
+					fmt.Println("chanel", s, "gotcha in select. n =", n, "(of N.ins", NN.ins, "). Value received:", NN.in[n])
 					//}
 					go NN.calc()
 				}
