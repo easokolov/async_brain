@@ -101,7 +101,9 @@ func (N *Neuron) calc() {
 			//c <- val
 		}
 	} else {
+		N.outmux.Lock()
 		fmt.Println("!!!!!!!!!!!!!!! delta is too low.", val, "(", N.out, ")", "wouldn't be sent to", N.outs)
+		N.outmux.Unlock()
 	}
 }
 
