@@ -62,6 +62,7 @@ func (N *NeuronX) calc() {
 		val += v * N.weight[n]
 	}
 	val = _sigmoid_(val)
+	fmt.Println("In da calc(): sigmoid=", val)
 
 	delta = math.Abs((N.out - val) / N.out)
 	pre_delta = math.Abs((N.pre_out - val) / N.pre_out)
@@ -70,13 +71,13 @@ func (N *NeuronX) calc() {
 		N.pre_out = N.out // И не сохраняем новое значение val в N.out.
 		N.out = val       // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
 		//FIXME
-		//fmt.Println(N.out, ">>", N.outs)
+		fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
 			//FIXME
 			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- signal, value float64) {
 				//FIXME
-				//fmt.Println("Sending", value, "into", cc)
+				fmt.Println("Sending", value, "into", cc)
 				cc <- signal{N, value}
 			}(c, val)
 			//c <- val
@@ -91,8 +92,13 @@ func (N *NeuronX) calc() {
 func (N *NeuronX) listen() {
 	for {
 		for i := range N.in_ch {
+			//FIXME
+			fmt.Println("Neuron", N, "received i=", i)
 			N.in[i.source] = i.val
 		}
+		//FIXME !!! Проблема !!! Мы из этого цикла никогда не выходим. Так что с одной сторон внешний цикл не нужен,
+		//                       а с другой стороны, calc() таки будет запускаться после каждого пакета. А значит, лавинный рост не исправляется.
+		fmt.Println(N, "runs calc() from listen()")
 		N.calc()
 	}
 }
@@ -103,10 +109,13 @@ func nn_random_constructorX(n_in, n_int, n_out, max_syn int) []NeuronX {
 	N := make([]NeuronX, n_in+n_int+n_out)
 	for i, _ := range N {
 		n := &N[i]
-		n.in_ch = make(chan signal, max_syn)       // Один входной канал для всех синапсов емкостью max_syn.
-		n.in = make(map[*NeuronX]float64, 1)       // Кэш входных сигналов по указателю отправителя.
-		n.weight = make(map[*NeuronX]float64, 1)   // Карта весов по указателю отправителя.
-		n.outs = make(map[*NeuronX]chan signal, 1) // Выходные сигналы
+		n.in_ch = make(chan signal, max_syn)        // Один входной канал для всех синапсов емкостью max_syn.
+		n.in = make(map[*NeuronX]float64, 1)        // Кэш входных сигналов по указателю отправителя.
+		n.weight = make(map[*NeuronX]float64, 1)    // Карта весов по указателю отправителя.
+		n.outs = make(map[*NeuronX]chan signal, 10) // Выходные сигналы
+	}
+	for i, _ := range N {
+		n := &N[i]
 		if i >= n_in {
 			for j := 0; j <= r.Intn(max_syn); j++ { // Создаем до max_syn рэндомных синапсов.
 				//n.link_withX(&N[r.Intn(n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
@@ -135,7 +144,7 @@ func main() {
 
 	// Запуск
 	debug = 1
-	n0 := &In[0]
+	n0 := &In[2]
 	for _, c := range n0.outs {
 		c <- signal{n0, 1.0}
 		break // отправляем только в самый первый нейрон
