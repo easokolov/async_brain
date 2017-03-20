@@ -71,13 +71,13 @@ func (N *NeuronX) calc() {
 		N.pre_out = N.out // И не сохраняем новое значение val в N.out.
 		N.out = val       // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
 		//FIXME
-		fmt.Println(N.out, ">>", N.outs)
+		//fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
 			//FIXME
 			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- signal, value float64) {
 				//FIXME
-				fmt.Println("Sending", value, "into", cc)
+				//fmt.Println("Sending", value, "into", cc)
 				cc <- signal{N, value}
 			}(c, val)
 			//c <- val
@@ -95,6 +95,8 @@ func (N *NeuronX) listen() {
 			//FIXME
 			fmt.Println("Neuron", N, "received i=", i)
 			N.in[i.source] = i.val
+			// FIXME !!!!
+			N.calc()
 		}
 		//FIXME !!! Проблема !!! Мы из этого цикла никогда не выходим. Так что с одной сторон внешний цикл не нужен,
 		//                       а с другой стороны, calc() таки будет запускаться после каждого пакета. А значит, лавинный рост не исправляется.
@@ -144,7 +146,7 @@ func main() {
 
 	// Запуск
 	debug = 1
-	n0 := &In[2]
+	n0 := &In[0]
 	for _, c := range n0.outs {
 		c <- signal{n0, 1.0}
 		break // отправляем только в самый первый нейрон
