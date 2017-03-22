@@ -1,0 +1,30 @@
+v0.02
+
+  * Single chanel for one neuron. All input signals are marked by source
+  neurons and pushed to the input chanel of linked neuron. So we don't need
+  more then one thread for every neuron. So we don't need mutexes.
+  * NeurNet Stops if stabilized in binary state (some neuron(s) blinks between two
+  values).
+  * Reducing cascade rising of signal numbers with many back links.
+  Situation like this
+  
+             -> N0 <-
+            |  / \   |
+            \_N1  N2_/
+  
+  leads to unlimited rising of signal numbers. Now this problem is solved
+  with pair of blocking and unblocking selects of input. Calc() is started
+  after receiving all of signals in the chanel.
+
+ -- Eugeny Sokolov <esokolov@navigo.su>  Thu, 23 Mar 2017 02:13:56 +0500
+
+
+v0.01
+
+  * First version of multithreaded absolutely asyncronous NeurNet with
+  arbitrary structure.
+  * No multithread problems with(out) mutexes. (go build --race / go run
+  --race).
+  * Random constructor of NeurNet.
+
+ -- Eugeny Sokolov <esokolov@navigo.su>  Sun, 12 Mar 2017 01:13:56 +0500
