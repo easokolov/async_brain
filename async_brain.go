@@ -34,27 +34,27 @@ func _sigmoid_(f float64) float64 {
 	 val - значение сигнала.
 */
 type signal struct {
-	source *NeuronX
+	source *Neuron
 	val    float64
 }
 
-type NeuronX struct {
+type Neuron struct {
 	in_ch   chan signal              // Единый входной канал
-	in      map[*NeuronX]float64     // Кэш входных значений
-	weight  map[*NeuronX]float64     // Веса по указателям источников.
-	outs    map[*NeuronX]chan signal // Выходные каналы
+	in      map[*Neuron]float64     // Кэш входных значений
+	weight  map[*Neuron]float64     // Веса по указателям источников.
+	outs    map[*Neuron]chan signal // Выходные каналы
 	out     float64
 	pre_out float64
 }
 
 // Связать нейрон N c нейроном N2 с весом weight
 // N2 будет испускать сигналы, а N будет их обрабатывать.
-func (N *NeuronX) link_withX(N2 *NeuronX, weight float64) {
+func (N *Neuron) link_with(N2 *Neuron, weight float64) {
 	N.weight[N2] = weight
 	N2.outs[N] = N.in_ch
 }
 
-func (N *NeuronX) calc() {
+func (N *Neuron) calc() {
 	val := 0.0
 	delta := 0.0     // дельта между текущим значением нейрона и предыдущим.
 	pre_delta := 0.0 // дельта между текущим значением нейрона и пред-предыдущим (pre_out).
@@ -62,12 +62,11 @@ func (N *NeuronX) calc() {
 		val += v * N.weight[n]
 	}
 	val = _sigmoid_(val)
-	fmt.Println("In da calc(): sigmoid=", val)
 
 	delta = math.Abs((N.out - val) / N.out)
 	pre_delta = math.Abs((N.pre_out - val) / N.pre_out)
 	//if (delta > 0.01) && (pre_delta > 0.01) { // Если значение изменилось не больше, чем на 1%, то сигнал не подаем.
-	if (delta > 0.001) && (pre_delta > 0.001) { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
+	if delta > 0.001 && (pre_delta > 0.001) { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
 		N.pre_out = N.out // И не сохраняем новое значение val в N.out.
 		N.out = val       // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
 		//FIXME
@@ -89,43 +88,43 @@ func (N *NeuronX) calc() {
 
 }
 
-func (N *NeuronX) listen() {
+/* First is blocking select, which gets one signal.
+   Then goes unblocking select, which gets other signals if they are already in queue.
+   If queue is empty (select default), then we do calc().
+*/
+func (N *Neuron) listen() {
 	for {
-		for i := range N.in_ch {
-			//FIXME
-			fmt.Println("Neuron", N, "received i=", i)
-			N.in[i.source] = i.val
-			// FIXME !!!!
+		select {
+		case sig := <-N.in_ch:
+			N.in[sig.source] = sig.val
+		}
+		select {
+		case sig := <-N.in_ch:
+			fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig) // На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
+			N.in[sig.source] = sig.val
+		default:
 			N.calc()
 		}
-		//FIXME !!! Проблема !!! Мы из этого цикла никогда не выходим. Так что с одной сторон внешний цикл не нужен,
-		//                       а с другой стороны, calc() таки будет запускаться после каждого пакета. А значит, лавинный рост не исправляется.
-		fmt.Println(N, "runs calc() from listen()")
-		N.calc()
-		// !!! Надо сделать неблокирующий селект. Пока он может читать, пусть читает не запуская calc, а только взводя флаг, что надо сделать calc
-		// Когда данные закончатся, наступает default в котором проверяется наличие этого флага. Если он стоит, то запускается calc и флаг сбрасывается.
-		// Таким образом, вся обработка одного нейрона будет работать в одном потоке.
-		// Надо только придумать, что делать, если данных нет. 1) Либо sleep (чтобы не было бесконечного цикла, жрущего проц) 2) либо включать блокирующий select.
 	}
 }
 
-func nn_random_constructorX(n_in, n_int, n_out, max_syn int) []NeuronX {
+func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 	var n_neur int = n_in + n_int + n_out
 	r := rand.New(rand.NewSource(111237))
-	N := make([]NeuronX, n_in+n_int+n_out)
+	N := make([]Neuron, n_in+n_int+n_out)
 	for i, _ := range N {
 		n := &N[i]
 		n.in_ch = make(chan signal, max_syn)        // Один входной канал для всех синапсов емкостью max_syn.
-		n.in = make(map[*NeuronX]float64, 1)        // Кэш входных сигналов по указателю отправителя.
-		n.weight = make(map[*NeuronX]float64, 1)    // Карта весов по указателю отправителя.
-		n.outs = make(map[*NeuronX]chan signal, 10) // Выходные сигналы
+		n.in = make(map[*Neuron]float64, 1)        // Кэш входных сигналов по указателю отправителя.
+		n.weight = make(map[*Neuron]float64, 1)    // Карта весов по указателю отправителя.
+		n.outs = make(map[*Neuron]chan signal, 10) // Выходные сигналы
 	}
 	for i, _ := range N {
 		n := &N[i]
 		if i >= n_in {
 			for j := 0; j <= r.Intn(max_syn); j++ { // Создаем до max_syn рэндомных синапсов.
-				//n.link_withX(&N[r.Intn(n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
-				n.link_withX(&N[r.Intn(n_neur)], -3.0+r.Float64()*6.0)
+				//n.link_with(&N[r.Intn(n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
+				n.link_with(&N[r.Intn(n_neur)], -3.0+r.Float64()*6.0)
 			}
 		}
 	}
@@ -137,7 +136,7 @@ func main() {
 	var n_int = 3
 	var n_out = 3
 	var max_syn = 2
-	var N []NeuronX = nn_random_constructorX(n_in, n_int, n_out, max_syn)
+	var N []Neuron = nn_random_constructor(n_in, n_int, n_out, max_syn)
 	In := N[:n_in]
 	Int := N[n_in : n_in+n_int]
 	Out := N[n_in+n_int:]
