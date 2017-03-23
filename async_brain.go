@@ -39,7 +39,7 @@ type signal struct {
 }
 
 type Neuron struct {
-	in_ch   chan signal              // Единый входной канал
+	in_ch   chan signal             // Единый входной канал
 	in      map[*Neuron]float64     // Кэш входных значений
 	weight  map[*Neuron]float64     // Веса по указателям источников.
 	outs    map[*Neuron]chan signal // Выходные каналы
@@ -114,7 +114,7 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 	N := make([]Neuron, n_in+n_int+n_out)
 	for i, _ := range N {
 		n := &N[i]
-		n.in_ch = make(chan signal, max_syn)        // Один входной канал для всех синапсов емкостью max_syn.
+		n.in_ch = make(chan signal, max_syn)       // Один входной канал для всех синапсов емкостью max_syn.
 		n.in = make(map[*Neuron]float64, 1)        // Кэш входных сигналов по указателю отправителя.
 		n.weight = make(map[*Neuron]float64, 1)    // Карта весов по указателю отправителя.
 		n.outs = make(map[*Neuron]chan signal, 10) // Выходные сигналы
