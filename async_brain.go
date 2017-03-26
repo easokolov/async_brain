@@ -73,7 +73,7 @@ func (N *Neuron) calc() {
 		//fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
 			//FIXME
-			fmt.Println("\t\t\t\t\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
+			fmt.Println("\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- signal, value float64) {
 				//FIXME
 				//fmt.Println("Sending", value, "into", cc)
@@ -83,7 +83,7 @@ func (N *Neuron) calc() {
 		}
 	} else {
 		//FIXME
-		fmt.Println("!!!!!!!!!!!!!!! delta is too low.", val, "(", N.out, ")", "wouldn't be sent to", N.outs)
+		//fmt.Println("!!!!!!!!!!!!!!! delta is too low.", val, "(", N.out, ")", "wouldn't be sent to", N.outs)
 	}
 
 }
@@ -114,9 +114,12 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 	N := make([]Neuron, n_in+n_int+n_out)
 	for i, _ := range N {
 		n := &N[i]
-		n.in_ch = make(chan signal, max_syn)       // Один входной канал для всех синапсов емкостью max_syn.
-		n.in = make(map[*Neuron]float64, 1)        // Кэш входных сигналов по указателю отправителя.
-		n.weight = make(map[*Neuron]float64, 1)    // Карта весов по указателю отправителя.
+		// Для входных нейронов это не нужно.
+		if i >= n_in {
+			n.in_ch = make(chan signal, max_syn)    // Один входной канал для всех синапсов емкостью max_syn.
+			n.in = make(map[*Neuron]float64, 1)     // Кэш входных сигналов по указателю отправителя.
+			n.weight = make(map[*Neuron]float64, 1) // Карта весов по указателю отправителя.
+		}
 		n.outs = make(map[*Neuron]chan signal, 10) // Выходные сигналы
 	}
 	for i, _ := range N {
@@ -132,10 +135,10 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 }
 
 func main() {
-	var n_in = 3
-	var n_int = 3
-	var n_out = 3
-	var max_syn = 2
+	var n_in = 30
+	var n_int = 30
+	var n_out = 30
+	var max_syn = 7
 	var N []Neuron = nn_random_constructor(n_in, n_int, n_out, max_syn)
 	In := N[:n_in]
 	Int := N[n_in : n_in+n_int]
@@ -143,7 +146,7 @@ func main() {
 	Linked := N[n_in:]
 
 	// Работа.
-	for i, _ := range Linked { // !!! Если делать 'for i,n := range Linked', то в n будет копия.
+	for i, _ := range Linked { // !!! Если делать 'for i,n := range Linked', то в n будет копия нейрона.
 		go (&Linked[i]).listen()
 	}
 
