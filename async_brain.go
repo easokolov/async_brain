@@ -88,6 +88,37 @@ func (N *Neuron) calc() {
 
 }
 
+/* ---=== Mutation ===--- */
+/*
+func (N *Neuron) weight_change_random() {
+
+}
+
+func (N *Neuron) synapse_add_random() {
+
+}
+
+func (N *Neuron) synapse_del_random() {
+
+}
+
+func (NN Neuron[]) neuron_add_random() {
+
+}
+
+func (NN Neuron[]) neuron_del_random() {
+
+}
+
+func (NN Neuron[]) dump(finlename str) {
+
+}
+
+func (NN Neuron[]) load(filename str) {
+
+}
+*/
+
 /* First is blocking select, which gets one signal.
    Then goes unblocking select, which gets other signals if they are already in queue.
    If queue is empty (select default), then we do calc().
@@ -100,7 +131,7 @@ func (N *Neuron) listen() {
 		}
 		select {
 		case sig := <-N.in_ch:
-			fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig) // На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
+			//fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig) // На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
 			N.in[sig.source] = sig.val
 		default:
 			N.calc()
