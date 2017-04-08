@@ -9,6 +9,9 @@ async_brain
 _obj
 _test
 
+# Editor
+*.swp
+
 # Architecture specific extensions/prefixes
 *.[568vq]
 [568vq].out
