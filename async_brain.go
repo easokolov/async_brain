@@ -54,6 +54,13 @@ type NeurNet struct {
 	max_syn int
 	n_neur  int
 	Neur    []Neuron
+	// In, Int, Out, Linked - поверх того же массива, на который указывает Neur.
+	// ! Если в Neur добвить нейрон, то массив будет переразмещен, и все эти слайсы надо будет переопределить !
+	// ! Иначе они продолжат указывать на старый массив !
+	In     []Neuron
+	Int    []Neuron
+	Out    []Neuron
+	Linked []Neuron
 }
 
 // Связать нейрон N c нейроном N2 с весом weight
@@ -118,23 +125,18 @@ type Neuron struct {
 
 // Sinapse_Remove
 // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
-func (N *Neuron) synapse_del_random(N2 *Neuron) {
-	N2.receiver_del(N)
+//func (N *Neuron) synapse_del_random(N2 *Neuron) {
+func (N *Neuron) synapse_del(N2 *Neuron) {
+	delete(N2.outs, N)
 	delete(N.in, N2)
 	delete(N.weight, N2)
-	if len(N.in) == 0 {
-		N.in_ch <- signal{nil, 31337}
-	}
-	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen()
+	//if len(N.in) == 0 {
+	//	N.in_ch <- signal{nil, 31337}
+	//}
+	// Дернуть neuron_del() должен вызывающий synapse_del()
+	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen().
 	// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
-	// Память освобождает garbageCollector, так что, достаточно перестать использовать элемент (по идее, надо перестать на него ссылаться, но это надо уточнить).
 	// Чтобы погасить горутину N.listen() можно посылать какое-то спецзначение (чтобы не создавать отдельный управляющий сигнал.).
-}
-
-// У нейрона N удаляем передающую часть синапса к N2.in_ch.
-// Т.е. удаляется N.outs[targ_N]
-func (N *Neuron) receiver_del(N2 *Neuron) {
-	delete(N.outs, N2)
 }
 
 /*
@@ -162,40 +164,39 @@ func (NN Neuron[]) load(filename str) {
 */
 
 // Neur_Remove
-/*
-func (NN Neuron[]) neuron_del(N *Neuron) {
+func (NN *NeurNet) neuron_del(N *Neuron) {
 	fmt.Println("Neuron", N, "would be stopped!")
-	close(N.in_ch)
-	// Если в N.in что-то есть, перебрать и поотрвать синапсы (synapse_del())
+	// If there is something in N.in or N.outs, we should itterete it and remove synapses.
+	for n, _ := range N.in {
+		N.synapse_del(n)
+	}
+	for n, _ := range N.outs {
+		n.synapse_del(N)
+		if len(n.in) == 0 {
+			NN.neuron_del(n)
+		}
+	}
 	N.in = nil
 	N.weight = nil
 	N.outs = nil
-	// Должен также быть пересчет слайса нейронов в NN
+	// Должен также быть пересчет слайса нейронов в NN.Neur
 	// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
 	//  Затем уменьшаем слайс, отрезая последний элемент)
+	N.in_ch <- signal{nil, 31337}
+	close(N.in_ch)
+	for i, _ := range NN.Neur {
+		if &(NN.Neur[i]) == N {
+			fmt.Println("!!!!!!!!!!!!We found a deleted neuron with index %v. We should delete it", i)
+		}
+	}
 }
-*/
-/*
-//FIXME
-Это просто тест.
-Не понятно, как сделать метод для слайса. Судя по всему, это нельзя сделать.
-Видимо, надо будет передавать нейросеть параметром.
-func (NN *(Neuron[])) neuron_del() {
 
-}
-*/
-
-func (N *Neuron) listen() {
+func (NN *NeurNet) listen(N *Neuron) {
 	for {
 		select {
 		case sig := <-N.in_ch:
 			if sig.val == 31337 && sig.source == nil {
-				//FIXME // Заменить на neuron_del()
-				fmt.Println("Neuron", N, "would be stopped!")
-				close(N.in_ch)
-				N.in = nil
-				N.weight = nil
-				N.outs = nil
+				//NN.neuron_del(N)
 				return
 			}
 			N.in[sig.source] = sig.val
@@ -203,12 +204,7 @@ func (N *Neuron) listen() {
 		select {
 		case sig := <-N.in_ch:
 			if sig.val == 31337 && sig.source == nil {
-				//FIXME // Заменить на neuron_del()
-				fmt.Println("Neuron", N, "would be stopped!")
-				close(N.in_ch)
-				N.in = nil
-				N.weight = nil
-				N.outs = nil
+				//NN.neuron_del(N)
 				return
 			}
 			//fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig) // На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
@@ -219,17 +215,21 @@ func (N *Neuron) listen() {
 	}
 }
 
-func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
+func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
 	var NN NeurNet
 	NN.n_in = n_in
 	NN.n_int = n_int
 	NN.n_out = n_out
 	NN.max_syn = max_syn
 	NN.n_neur = n_in + n_int + n_out
+	NN.Neur = make([]Neuron, NN.n_neur)
+	NN.In = NN.Neur[:n_in]
+	NN.Int = NN.Neur[n_in : n_in+n_int]
+	NN.Out = NN.Neur[n_in+n_int:]
+	NN.Linked = NN.Neur[n_in:]
 	r := rand.New(rand.NewSource(111237))
-	NN := make([]Neuron, n_in+n_int+n_out)
-	for i, _ := range NN {
-		n := &NN[i]
+	for i, _ := range NN.Neur {
+		n := &(NN.Neur[i])
 		// Для входных нейронов это не нужно.
 		if i >= n_in {
 			n.in_ch = make(chan signal, max_syn)    // Один входной канал для всех синапсов емкостью max_syn.
@@ -238,12 +238,12 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 		}
 		n.outs = make(map[*Neuron]chan signal, 10) // Выходные сигналы
 	}
-	for i, _ := range NN {
-		n := &NN[i]
+	for i, _ := range NN.Neur {
+		n := &(NN.Neur[i])
 		if i >= n_in {
 			for j := 0; j <= r.Intn(max_syn); j++ { // Создаем до max_syn рэндомных синапсов.
-				//n.link_with(&NN[r.Intn(n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
-				n.link_with(&NN[r.Intn(n_neur)], -3.0+r.Float64()*6.0)
+				//n.link_with(&NN[r.Intn(NN.n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
+				n.link_with(&(NN.Neur[r.Intn(NN.n_neur)]), -3.0+r.Float64()*6.0)
 			}
 		}
 	}
@@ -251,24 +251,16 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) []Neuron {
 }
 
 func main() {
-	var n_in = 30
-	var n_int = 30
-	var n_out = 30
-	var max_syn = 7
-	var NN []Neuron = nn_random_constructor(n_in, n_int, n_out, max_syn)
-	In := NN[:n_in]
-	Int := NN[n_in : n_in+n_int]
-	Out := NN[n_in+n_int:]
-	Linked := NN[n_in:]
+	var NN NeurNet = nn_random_constructor(30, 30, 30, 7)
 
 	// Работа.
-	for i, _ := range Linked { // !!! Если делать 'for i,n := range Linked', то в n будет копия нейрона.
-		go (&Linked[i]).listen()
+	for i, _ := range NN.Linked { // !!! Если делать 'for i,n := range NN.Linked', то в n будет копия нейрона.
+		go (&NN).listen(&(NN.Linked[i]))
 	}
 
 	// Запуск
 	debug = 1
-	n0 := &In[0]
+	n0 := &(NN.In[0])
 	for _, c := range n0.outs {
 		c <- signal{n0, 1.0}
 		break // отправляем только в самый первый нейрон
@@ -282,9 +274,9 @@ func main() {
 			return
 		}
 		if text[0] == "p"[0] {
-			fmt.Printf("In:\t%p:\t%+v\n", In, In)
-			fmt.Printf("Int:\t%p:\t%+v\n", Int, Int)
-			fmt.Printf("Out:\t%p:\t%+v\n\n", Out, Out)
+			fmt.Printf("In:\t%p:\t%+v\n", NN.In, NN.In)
+			fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
+			fmt.Printf("Out:\t%p:\t%+v\n\n", NN.Out, NN.Out)
 		}
 		in_int, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
@@ -295,7 +287,7 @@ func main() {
 			//}
 			for _, c := range n0.outs { // 'n0' остался из раздела "Запуск"
 				if in_int == 31337 {
-					c <- signal{nil, in_int}
+					(&NN).neuron_del(n0)
 				} else {
 					c <- signal{n0, in_int}
 				}
