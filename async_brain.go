@@ -11,11 +11,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	//"sync" // Mutex
+	"sync" // Mutex
 	//"time"
 )
 
-var debug int32
+//var debug int32 = 1
 
 func _sigmoid_(f float64) float64 {
 	/*
@@ -43,8 +43,8 @@ type Neuron struct {
 	in      map[*Neuron]float64     // Кэш входных значений
 	weight  map[*Neuron]float64     // Веса по указателям источников.
 	outs    map[*Neuron]chan signal // Выходные каналы
-	out     float64
-	pre_out float64
+	out     float64                 // Последнее выходное значение.
+	pre_out float64                 // Предыдущее выходное значение.
 }
 
 type NeurNet struct {
@@ -74,25 +74,27 @@ func (N *Neuron) calc() {
 	val := 0.0
 	delta := 0.0     // дельта между текущим значением нейрона и предыдущим.
 	pre_delta := 0.0 // дельта между текущим значением нейрона и пред-предыдущим (pre_out).
-	for n, v := range N.in {
-		val += v * N.weight[n]
+	if len(N.weight) == 0 {
+		// Это входной нейрон. Входной канал есть, и на него может быть подано значение.
+		// Но оно не будет связано с каким-то другим нейроном. Веса нет. Приходит от nil.
+		// Это же значение будем передавать на выход без каких-либо преобразований.
+		val = N.in[nil]
+	} else {
+		for n, v := range N.in {
+			val += v * N.weight[n]
+		}
+		val = _sigmoid_(val)
 	}
-	val = _sigmoid_(val)
 
 	delta = math.Abs((N.out - val) / N.out)
 	pre_delta = math.Abs((N.pre_out - val) / N.pre_out)
 	//if (delta > 0.01) && (pre_delta > 0.01) { // Если значение изменилось не больше, чем на 1%, то сигнал не подаем.
-	if delta > 0.001 && (pre_delta > 0.001) { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
+	if (delta > 0.001 && (pre_delta > 0.001)) || len(N.weight) == 0 { // Если значение изменилось не больше, чем на 0.1%, то сигнал не подаем.
+		// Кроме входных нейронов. Если на них приходит старое значение, все равно передаем в НС.
 		N.pre_out = N.out // И не сохраняем новое значение val в N.out.
 		N.out = val       // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
-		//FIXME
-		//fmt.Println(N.out, ">>", N.outs)
 		for _, c := range N.outs {
-			//FIXME
-			fmt.Println("\t\t\t\tSending", val, "to", c, "of [", N.outs, "]")
 			go func(cc chan<- signal, value float64) {
-				//FIXME
-				//fmt.Println("Sending", value, "into", cc)
 				cc <- signal{N, value}
 			}(c, val)
 			//c <- val
@@ -167,14 +169,14 @@ func (NN Neuron[]) load(filename str) {
 func (NN *NeurNet) neuron_del(N *Neuron) {
 	fmt.Println("Neuron", N, "would be stopped!")
 	// If there is something in N.in or N.outs, we should itterete it and remove synapses.
-	for n, _ := range N.in {
+	for n, _ := range N.weight {
 		N.synapse_del(n)
 	}
 	for n, _ := range N.outs {
 		n.synapse_del(N)
-		if len(n.in) == 0 {
-			NN.neuron_del(n)
-		}
+		//if len(n.in) == 0 {
+		//	NN.neuron_del(n)
+		//}
 	}
 	N.in = nil
 	N.weight = nil
@@ -182,33 +184,46 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 	// Должен также быть пересчет слайса нейронов в NN.Neur
 	// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
 	//  Затем уменьшаем слайс, отрезая последний элемент)
-	N.in_ch <- signal{nil, 31337}
-	close(N.in_ch)
+
+	//Если нейрон входной, то у него не создан канал. Надо либо создавать канал, либо проверять канал на !=nil и не делать отправку 31337!
+	if N.in_ch != nil {
+		N.in_ch <- signal{nil, 31337}
+		close(N.in_ch)
+	}
 	for i, _ := range NN.Neur {
 		if &(NN.Neur[i]) == N {
-			fmt.Println("!!!!!!!!!!!!We found a deleted neuron with index %v. We should delete it", i)
+			fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We should delete it\n", i)
 		}
 	}
 }
 
+// Couple of selects (blocked and unblocked) are for reducing calc()-s.
+// (Will receive all ready incomings in incoming chanels befor calling calc()).
+// receive() just doing every select must to do (for reducing the code).
 func (NN *NeurNet) listen(N *Neuron) {
+	// if receive() returns false, then listen() should be exit too.
+	receive := func(N *Neuron, sig signal) bool {
+		if sig.val == 31337 && sig.source == nil {
+			//NN.neuron_del(N)
+			return (false)
+		}
+		N.in[sig.source] = sig.val
+		return (true)
+	}
+
 	for {
 		select {
 		case sig := <-N.in_ch:
-			if sig.val == 31337 && sig.source == nil {
-				//NN.neuron_del(N)
+			if !receive(N, sig) {
 				return
 			}
-			N.in[sig.source] = sig.val
 		}
 		select {
 		case sig := <-N.in_ch:
-			if sig.val == 31337 && sig.source == nil {
-				//NN.neuron_del(N)
+			if !receive(N, sig) {
 				return
 			}
 			//fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig) // На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
-			N.in[sig.source] = sig.val
 		default:
 			N.calc()
 		}
@@ -230,17 +245,17 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
 	r := rand.New(rand.NewSource(111237))
 	for i, _ := range NN.Neur {
 		n := &(NN.Neur[i])
+		n.in_ch = make(chan signal, max_syn)      // Один входной канал для всех синапсов емкостью max_syn.
+		n.outs = make(map[*Neuron]chan signal, 1) // Выходные сигналы. Можно задать начальную емкость.
+		n.in = make(map[*Neuron]float64, 1)       // Кэш входных сигналов по указателю отправителя. (У входных нейронов указатель отправителя - всегда nil.)
 		// Для входных нейронов это не нужно.
 		if i >= n_in {
-			n.in_ch = make(chan signal, max_syn)    // Один входной канал для всех синапсов емкостью max_syn.
-			n.in = make(map[*Neuron]float64, 1)     // Кэш входных сигналов по указателю отправителя.
 			n.weight = make(map[*Neuron]float64, 1) // Карта весов по указателю отправителя.
 		}
-		n.outs = make(map[*Neuron]chan signal, 10) // Выходные сигналы
 	}
 	for i, _ := range NN.Neur {
 		n := &(NN.Neur[i])
-		if i >= n_in {
+		if i >= n_in { // Not for incoming neurons.
 			for j := 0; j <= r.Intn(max_syn); j++ { // Создаем до max_syn рэндомных синапсов.
 				//n.link_with(&NN[r.Intn(NN.n_neur)], float64(r.Intn(50))/float64(r.Intn(50)+1.0))
 				n.link_with(&(NN.Neur[r.Intn(NN.n_neur)]), -3.0+r.Float64()*6.0)
@@ -248,6 +263,11 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
 		}
 	}
 	return NN
+}
+
+//FIXME
+func out(s string) {
+	fmt.Println(s)
 }
 
 func main() {
@@ -258,17 +278,24 @@ func main() {
 		go (&NN).listen(&(NN.Linked[i]))
 	}
 
+	// Входные нейроны теперь тоже имеют входной канал.
+	for i, _ := range NN.In {
+		go (&NN).listen(&(NN.In[i]))
+	}
+
 	// Запуск
-	debug = 1
 	n0 := &(NN.In[0])
 	for _, c := range n0.outs {
 		c <- signal{n0, 1.0}
 		break // отправляем только в самый первый нейрон
 	}
 
+	// Читаем клаву. Ждем команд или входов в n0
 	for {
+		out("000")
+		n0 = &(NN.In[0])
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter text: ")
+		fmt.Print("Enter command or input for n0: ")
 		text, _ := reader.ReadString('\n')
 		if text[0] == "q"[0] {
 			return
@@ -278,21 +305,27 @@ func main() {
 			fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
 			fmt.Printf("Out:\t%p:\t%+v\n\n", NN.Out, NN.Out)
 		}
-		in_int, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
+		if text[0] == "e"[0] {
+			fmt.Println("n0:", n0)
+		}
+		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
-			fmt.Println("_sigmoid_(", in_int, "):", _sigmoid_(in_int))
-			//FIXME
-			//if in_int == -1 {
-			debug = 1
-			//}
-			for _, c := range n0.outs { // 'n0' остался из раздела "Запуск"
-				if in_int == 31337 {
-					(&NN).neuron_del(n0)
-				} else {
-					c <- signal{n0, in_int}
-				}
-				break
+			fmt.Println("_sigmoid_(", input, "):", _sigmoid_(input))
+			out("a00")
+			fmt.Println("n0.outs =", n0.outs)
+
+			out("a01")
+			if input == 31337 {
+				out("a02")
+				(&NN).neuron_del(n0)
+				out("a03")
+				continue
 			}
+
+			n0.in_ch <- signal{nil, input}
+			//for _, c := range n0.outs {
+			//	c <- signal{n0, input}
+			//}
 		}
 	}
 }
