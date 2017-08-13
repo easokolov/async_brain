@@ -61,6 +61,7 @@ type NeurNet struct {
 	Int    []Neuron
 	Out    []Neuron
 	Linked []Neuron
+	mutex  sync.Mutex
 }
 
 // Связать нейрон N c нейроном N2 с весом weight
@@ -93,6 +94,7 @@ func (N *Neuron) calc() {
 		// Кроме входных нейронов. Если на них приходит старое значение, все равно передаем в НС.
 		N.pre_out = N.out // И не сохраняем новое значение val в N.out.
 		N.out = val       // Таким образом, мы даем "накопиться" дельте в несколько этапов, пока меняются значения входных синапсов.
+		fmt.Printf("%p -> %v -> %v\n", N, val, N.outs)
 		for _, c := range N.outs {
 			go func(cc chan<- signal, value float64) {
 				cc <- signal{N, value}
@@ -181,18 +183,27 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 	N.in = nil
 	N.weight = nil
 	N.outs = nil
-	// Должен также быть пересчет слайса нейронов в NN.Neur
-	// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
-	//  Затем уменьшаем слайс, отрезая последний элемент)
 
-	//Если нейрон входной, то у него не создан канал. Надо либо создавать канал, либо проверять канал на !=nil и не делать отправку 31337!
+	// Раньше у входных нейронов не было входного канала и для них не надо было посылать 31337.
+	// Сейчас не актуально, но провера на всякий случай пусть будет.
 	if N.in_ch != nil {
+		// Sending 31337 intoincoming chanel stops the listen thread of neuron.
 		N.in_ch <- signal{nil, 31337}
 		close(N.in_ch)
 	}
+
+	// Должен также быть пересчет слайса нейронов в NN.Neur
+	// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
+	//  Затем уменьшаем слайс, отрезая последний элемент)
 	for i, _ := range NN.Neur {
 		if &(NN.Neur[i]) == N {
-			fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We should delete it\n", i)
+			fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We'll delete it\n", i)
+			//copy(a[i:], a[i+1:]) - удаляет i-ый элемент слайса.
+			fmt.Println("len(NN.Neur)=", len(NN.Neur))
+			copy(NN.Neur[i:], NN.Neur[i+1:])
+			fmt.Println("len(NN.Neur)=", len(NN.Neur))
+			// Там есть еще объемы слоев. Их тоже надо менять
+
 		}
 	}
 }
