@@ -60,11 +60,12 @@ type NeurNet struct {
 	// ! Если в Neur добавить нейрон, то массив будет переразмещен, и все эти слайсы надо будет переопределить !
 	// ! Иначе они продолжат указывать на старый массив !
 	// ! Если удалить нейрон, но границы групп также изменятся. Также надо переопределять.
-	In     []Neuron
-	Int    []Neuron
-	Out    []Neuron
-	Linked []Neuron
-	mutex  sync.Mutex
+	In      []Neuron
+	Int     []Neuron
+	Out     []Neuron
+	Linked  []Neuron
+	Deleted map[*Neuron]int // indexes of deleted neurons.
+	mutex   sync.Mutex
 }
 
 // Связать нейрон N c нейроном N2 с весом weight
@@ -80,7 +81,7 @@ func (N *Neuron) calc() {
 	pre_delta := 0.0 // дельта между текущим значением нейрона и пред-предыдущим (pre_out).
 	if len(N.weight) == 0 {
 		// Это входной нейрон. Входной канал есть, и на него может быть подано значение.
-		// Но оно не будет связано с каким-то другим нейроном. Веса нет. Приходит от nil.
+		// Но ононе будет связано с каким-то другим нейроном. Веса нет. Приходит от nil.
 		// Это же значение будем передавать на выход без каких-либо преобразований.
 		val = N.in[nil]
 	} else {
@@ -120,7 +121,11 @@ func (NN *NeurNet) synapse_add_random() {
 	i := r.Intn(NN.n_linked)
 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
 	if len(n.weight) < NN.max_syn {
-		n.link_with(&(NN.Neur[r.Intn(NN.n_neur)]), -3.0+r.Float64()*6.0)
+		n_target := &(NN.Neur[r.Intn(NN.n_neur)])
+		if _,ok := NN.Deleted[n_target]; ok {
+			return
+		}
+		n.link_with(&(n_target, -3.0+r.Float64()*6.0)
 	} else {
 		out("Neuron synapses limit is exceeded.")
 	}
@@ -158,11 +163,6 @@ func (NN *NeurNet) neuron_add_random() {
 
 }
 
-// Neur_Remove
-func (NN *NeurNet) neuron_del_random() {
-
-}
-
 func (NN *NeurNet) dump(finlename str) {
 
 }
@@ -171,13 +171,28 @@ func (NN *NeurNet) load(filename str) {
 
 }
 */
-/* First is blocking select, which gets one Signal.
-   Then goes unblocking select, which gets other Signals if they are already in queue.
-   If queue is empty (select default), then we do calc().
-*/
 
+func (NN *NeurNet) neuron_del_random() {
+	i := r.Intn(NN.n_int)
+	n := &(NN.Int[i])
+	NN.neuron_del(n)
+}
+
+//FIXME
+// После удаления нейрона остальные смещаются и ИЗМЕНЯЮТ свой адрес. Но старый адрес уже прописан в Out и Weight итп. Здесь, ТОЧНО, происходит сбой.
+// Надо либо перечитывать и переписывать все указатели (но это ломает всю модель, т.к. у нас нет никакойм общей блокировки НС), либо избавиться от удаления нейронов. Может быть только помечать их как удаленные или не удалять вообще.
+// Еще вариант, перевести схему связи нейронов с указателей на индексы, как в сишной версии.
+// Но это тоже потребует блокировки связанных нейронов для переписывания у них индексов в weight, In и Out.
+// Решил при удалении не делать сдвиг, а записывать индекс удаленного нейрона в NN.Deleted.
+// При сохранении НС в файл мы будем самостоятельно составлять карту НС не через укаатели, а через индексы,
+// где и проведем процедуру учета удаленных нейронов (пробежимся по всем связям и уменьшим индексы, которые выше индексов удаленных нейронов).
+// Так что, память полностью освободится только у потомков.
 // Neur_Remove
 func (NN *NeurNet) neuron_del(N *Neuron) {
+	if _, ok := NN.Deleted[N]; ok {
+		return
+	}
+	NN.Deleted[N] = NN.get_index(N)
 	fmt.Println("Neuron", N, "would be stopped!")
 	// If there is something in N.in or N.outs, we should itterete it and remove synapses.
 	for n, _ := range N.weight {
@@ -201,41 +216,55 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 		close(N.in_ch)
 	}
 
-	// Должен также быть пересчет слайса нейронов в NN.Neur
-	// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
-	//  Затем уменьшаем слайс, отрезая последний элемент)
-	var i int // Finding index of deleted neuron
-	for i, _ = range NN.Neur {
-		if &(NN.Neur[i]) == N {
-			fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We'll delete it\n", i)
-			//copy(a[i:], a[i+1:]) - удаляет i-ый элемент слайса сдвигом.
-			// a = a[:len(a)-1] - укорачивание слайса на 1 элемент в конце.
-			fmt.Println("len(NN.Neur)=", len(NN.Neur))
-			copy(NN.Neur[i:], NN.Neur[i+1:])
-			NN.Neur = NN.Neur[:len(NN.Neur)-1]
-			fmt.Println("len(NN.Neur)=", len(NN.Neur))
-			break
+	/*
+		//// FIX Сдвиг делать нельзя, т.к. указатели в In Out и Weight остаются старыми и указывают уже на другие нейроны.
+		//// FIX А поменять их мы не можем, т.к. у нас нет общей блокировки НС.
+		// Должен также быть пересчет слайса нейронов в NN.Neur
+		// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
+		//  Затем уменьшаем слайс, отрезая последний элемент)
+		var i int // Finding index of deleted neuron
+		for i, _ = range NN.Neur {
+			if &(NN.Neur[i]) == N {
+				fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We'll delete it\n", i)
+				//copy(a[i:], a[i+1:]) - удаляет i-ый элемент слайса сдвигом.
+				// a = a[:len(a)-1] - укорачивание слайса на 1 элемент в конце.
+				fmt.Println("len(NN.Neur)=", len(NN.Neur))
+				copy(NN.Neur[i:], NN.Neur[i+1:])
+				NN.Neur = NN.Neur[:len(NN.Neur)-1]
+				fmt.Println("len(NN.Neur)=", len(NN.Neur))
+				break
+			}
 		}
-	}
-	// Меняем размер соответствующего слоя, переопределем сам слой (срез).
-	if i < NN.n_in {
-		NN.n_in -= 1
-	} else if (i >= NN.n_in) && (i < NN.n_in+NN.n_int) {
-		NN.n_int -= 1
-		NN.n_linked = NN.n_int + NN.n_out
-	} else {
-		NN.n_out -= 1
-		NN.n_linked = NN.n_int + NN.n_out
-	}
-	NN.n_neur = NN.n_in + NN.n_int + NN.n_out
-	NN.In = NN.Neur[:NN.n_in]
-	NN.Int = NN.Neur[NN.n_in : NN.n_in+NN.n_int]
-	NN.Out = NN.Neur[NN.n_in+NN.n_int:]
-	NN.Linked = NN.Neur[NN.n_in:]
+		// Меняем размер соответствующего слоя, переопределяем сам слой (срез).
+		if i < NN.n_in {
+			NN.n_in -= 1
+		} else if (i >= NN.n_in) && (i < NN.n_in+NN.n_int) {
+			NN.n_int -= 1
+			NN.n_linked = NN.n_int + NN.n_out
+		} else {
+			NN.n_out -= 1
+			NN.n_linked = NN.n_int + NN.n_out
+		}
+		NN.n_neur = NN.n_in + NN.n_int + NN.n_out
+		NN.In = NN.Neur[:NN.n_in]
+		NN.Int = NN.Neur[NN.n_in : NN.n_in+NN.n_int]
+		NN.Out = NN.Neur[NN.n_in+NN.n_int:]
+		NN.Linked = NN.Neur[NN.n_in:]
+	*/
 }
 
-// Couple of selects (blocked and unblocked) are for reducing calc()-s.
-// (Will receive all ready incomings in incoming chanels befor calling calc()).
+func (NN *NeurNet) get_index(N *Neuron) int {
+	for i, _ := range NN.Neur {
+		if &(NN.Neur[i]) == N {
+			return i
+		}
+	}
+	return -1
+}
+
+// First is blocking select, which gets one Signal.
+// Then goes unblocking select, which gets other Signals if they are already in queue.
+// If queue is empty (select default), then we do calc().
 // receive() just doing every select must to do (for reducing the code).
 func (NN *NeurNet) listen(N *Neuron) {
 	// if receive() returns false, then listen() should be exit too.
@@ -281,6 +310,7 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
 	NN.Int = NN.Neur[n_in : n_in+n_int]
 	NN.Out = NN.Neur[n_in+n_int:]
 	NN.Linked = NN.Neur[n_in:]
+	NN.Deleted = make(map[*Neuron]int, 0)
 	for i, _ := range NN.Neur {
 		n := &(NN.Neur[i])
 		n.in_ch = make(chan Signal, max_syn)      // Один входной канал для всех синапсов емкостью max_syn.
@@ -308,7 +338,7 @@ func out(s string) {
 }
 
 func main() {
-	var NN NeurNet = nn_random_constructor(30, 30, 30, 7)
+	var NN NeurNet = nn_random_constructor(1, 3, 1, 3)
 
 	// Работа.
 	for i, _ := range NN.Linked { // !!! Если делать 'for i,n := range NN.Linked', то в n будет копия нейрона.
@@ -344,7 +374,7 @@ func main() {
 			continue
 		}
 		if text[0] == "e"[0] {
-			fmt.Println("n0:", n0)
+			fmt.Printf("n0:\t%+v\n", n0)
 			continue
 		}
 		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
@@ -356,7 +386,7 @@ func main() {
 			out("a01")
 			if input == 31337 {
 				out("a02")
-				(&NN).neuron_del(n0)
+				(&NN).neuron_del_random()
 				out("a03")
 				continue
 			}
