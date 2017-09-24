@@ -122,10 +122,10 @@ func (NN *NeurNet) synapse_add_random() {
 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
 	if len(n.weight) < NN.max_syn {
 		n_target := &(NN.Neur[r.Intn(NN.n_neur)])
-		if _,ok := NN.Deleted[n_target]; ok {
+		if _, ok := NN.Deleted[n_target]; ok {
 			return
 		}
-		n.link_with(&(n_target, -3.0+r.Float64()*6.0)
+		n.link_with(n_target, -3.0+r.Float64()*6.0)
 	} else {
 		out("Neuron synapses limit is exceeded.")
 	}
@@ -173,9 +173,14 @@ func (NN *NeurNet) load(filename str) {
 */
 
 func (NN *NeurNet) neuron_del_random() {
-	i := r.Intn(NN.n_int)
-	n := &(NN.Int[i])
-	NN.neuron_del(n)
+	for k := 0; k < 3; k++ { // три попытки найти подходящий удаляемый нейрон.
+		i := r.Intn(NN.n_int)
+		n := &(NN.Int[i])
+		if _, ok := NN.Deleted[n]; ok {
+			continue // this neuron is olready deleted. Try again
+		}
+		NN.neuron_del(n)
+	}
 }
 
 //FIXME
@@ -215,42 +220,6 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 		N.in_ch <- Signal{nil, 31337}
 		close(N.in_ch)
 	}
-
-	/*
-		//// FIX Сдвиг делать нельзя, т.к. указатели в In Out и Weight остаются старыми и указывают уже на другие нейроны.
-		//// FIX А поменять их мы не можем, т.к. у нас нет общей блокировки НС.
-		// Должен также быть пересчет слайса нейронов в NN.Neur
-		// (Перестраиваем со сдвигом всех последующих нейронов на 1 влево.
-		//  Затем уменьшаем слайс, отрезая последний элемент)
-		var i int // Finding index of deleted neuron
-		for i, _ = range NN.Neur {
-			if &(NN.Neur[i]) == N {
-				fmt.Printf("!!!!!!!!!!!!We found a deleted neuron with index %v. We'll delete it\n", i)
-				//copy(a[i:], a[i+1:]) - удаляет i-ый элемент слайса сдвигом.
-				// a = a[:len(a)-1] - укорачивание слайса на 1 элемент в конце.
-				fmt.Println("len(NN.Neur)=", len(NN.Neur))
-				copy(NN.Neur[i:], NN.Neur[i+1:])
-				NN.Neur = NN.Neur[:len(NN.Neur)-1]
-				fmt.Println("len(NN.Neur)=", len(NN.Neur))
-				break
-			}
-		}
-		// Меняем размер соответствующего слоя, переопределяем сам слой (срез).
-		if i < NN.n_in {
-			NN.n_in -= 1
-		} else if (i >= NN.n_in) && (i < NN.n_in+NN.n_int) {
-			NN.n_int -= 1
-			NN.n_linked = NN.n_int + NN.n_out
-		} else {
-			NN.n_out -= 1
-			NN.n_linked = NN.n_int + NN.n_out
-		}
-		NN.n_neur = NN.n_in + NN.n_int + NN.n_out
-		NN.In = NN.Neur[:NN.n_in]
-		NN.Int = NN.Neur[NN.n_in : NN.n_in+NN.n_int]
-		NN.Out = NN.Neur[NN.n_in+NN.n_int:]
-		NN.Linked = NN.Neur[NN.n_in:]
-	*/
 }
 
 func (NN *NeurNet) get_index(N *Neuron) int {
