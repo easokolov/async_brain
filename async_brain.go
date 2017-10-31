@@ -120,10 +120,13 @@ func (N *Neuron) weight_change_random() {
 func (NN *NeurNet) synapse_add_random() {
 	i := r.Intn(NN.n_linked)
 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
+    if _, ok := NN.Deleted[n]; ok {
+        return  // skip deleted neurons
+    }
 	if len(n.weight) < NN.max_syn {
 		n_target := &(NN.Neur[r.Intn(NN.n_neur)])
 		if _, ok := NN.Deleted[n_target]; ok {
-			return
+			return  // skip deleted neurons
 		}
 		n.link_with(n_target, -3.0+r.Float64()*6.0)
 	} else {
@@ -189,7 +192,7 @@ func (NN *NeurNet) neuron_del_random() {
 // Еще вариант, перевести схему связи нейронов с указателей на индексы, как в сишной версии.
 // Но это тоже потребует блокировки связанных нейронов для переписывания у них индексов в weight, In и Out.
 // Решил при удалении не делать сдвиг, а записывать индекс удаленного нейрона в NN.Deleted.
-// При сохранении НС в файл мы будем самостоятельно составлять карту НС не через укаатели, а через индексы,
+// При сохранении НС в файл мы будем самостоятельно составлять карту НС не через указатели, а через индексы,
 // где и проведем процедуру учета удаленных нейронов (пробежимся по всем связям и уменьшим индексы, которые выше индексов удаленных нейронов).
 // Так что, память полностью освободится только у потомков.
 // Neur_Remove
@@ -199,22 +202,19 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 	}
 	NN.Deleted[N] = NN.get_index(N)
 	fmt.Println("Neuron", N, "would be stopped!")
-	// If there is something in N.in or N.outs, we should itterete it and remove synapses.
+	// If there is something in N.in or N.outs, we should itterate it and remove synapses.
 	for n, _ := range N.weight {
 		N.synapse_del(n)
 	}
 	for n, _ := range N.outs {
 		n.synapse_del(N)
-		//if len(n.in) == 0 {
-		//	NN.neuron_del(n)
-		//}
 	}
 	N.in = nil
 	N.weight = nil
 	N.outs = nil
 
 	// Раньше у входных нейронов не было входного канала и для них не надо было посылать 31337.
-	// Сейчас не актуально, но провера на всякий случай пусть будет.
+	// Сейчас не актуально, но проверка на всякий случай пусть будет.
 	if N.in_ch != nil {
 		// Sending 31337 intoincoming chanel stops the listen thread of neuron.
 		N.in_ch <- Signal{nil, 31337}
