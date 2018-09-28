@@ -114,19 +114,26 @@ func (N *Neuron) calc() {
 
 /* ---=== Mutation ===--- */
 func (N *Neuron) weight_change_random() {
-
+	index := r.Intn(len(N.weight)) // Выбираем случайный синапс
+	i := 0
+	for n, _ := range N.weight {
+		if i == index {
+			N.weight[n] += r.Float64() - 0.5
+		}
+		i++
+	}
 }
 
 func (NN *NeurNet) synapse_add_random() {
 	i := r.Intn(NN.n_linked)
 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
-    if _, ok := NN.Deleted[n]; ok {
-        return  // skip deleted neurons
-    }
+	if _, ok := NN.Deleted[n]; ok {
+		return // skip deleted neurons
+	}
 	if len(n.weight) < NN.max_syn {
 		n_target := &(NN.Neur[r.Intn(NN.n_neur)])
 		if _, ok := NN.Deleted[n_target]; ok {
-			return  // skip deleted neurons
+			return // skip deleted neurons
 		}
 		n.link_with(n_target, -3.0+r.Float64()*6.0)
 	} else {
