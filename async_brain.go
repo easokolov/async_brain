@@ -347,16 +347,16 @@ func main() {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter command or input for n0: ")
 		text, _ := reader.ReadString('\n')
-		if text[0] == "q"[0] {
+		if text[0] == 'q' {
 			return
 		}
-		if text[0] == "p"[0] {
+		if text[0] == 'p' {
 			fmt.Printf("In:\t%p:\t%+v\n", NN.In, NN.In)
 			fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
 			fmt.Printf("Out:\t%p:\t%+v\n\n", NN.Out, NN.Out)
 			continue
 		}
-		if text[0] == "e"[0] {
+		if text[0] == 'e' {
 			fmt.Printf("n0:\t%+v\n", n0)
 			continue
 		}
