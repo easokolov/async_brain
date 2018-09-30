@@ -131,6 +131,12 @@ func (N *Neuron) weight_change_random() {
 	}
 }
 
+func (NN *NeurNet) weight_change_random() {
+	i := r.Intn(NN.n_linked)
+	n := &(NN.Linked[i]) // Weight will be changed for n (random Linked neuron)
+	n.weight_change_random()
+}
+
 func (NN *NeurNet) synapse_add_random() {
 	i := r.Intn(NN.n_linked)
 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
@@ -147,16 +153,6 @@ func (NN *NeurNet) synapse_add_random() {
 		out("Neuron synapses limit is exceeded.")
 	}
 }
-
-/*
-type Neuron struct {
-	in_ch   chan Signal             // Единый входной канал
-	in      map[*Neuron]float64     // Кэш входных значений
-	weight  map[*Neuron]float64     // Веса по указателям источников.
-	outs    map[*Neuron]chan Signal // Выходные каналы
-	out     float64
-	pre_out float64
-}*/
 
 // Sinapse_Remove
 // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
@@ -375,6 +371,10 @@ func main() {
 			}
 			if input == 31338 {
 				(&NN).synapse_add_random()
+				continue
+			}
+			if input == 31339 {
+				(&NN).weight_change_random()
 				continue
 			}
 
