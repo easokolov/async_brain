@@ -154,9 +154,23 @@ func (NN *NeurNet) synapse_add_random() {
 	}
 }
 
-// Sinapse_Remove
+// Возвращает указатель на нейрон N2, к которому ведет случайный синапс нейрона N.
+func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
+	if len(N.weight) == 0 {
+		return nil, fmt.Errorf("get_random_synapse(): Neuron %v doesn't have any synapse", N)
+	}
+	index := r.Intn(len(N.weight))
+	i := 0
+	for N2, _ = range N.weight {
+		if i == index {
+			break
+		}
+		i++
+	}
+	return N2, nil
+}
+
 // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
-//func (N *Neuron) synapse_del_random(N2 *Neuron) {
 func (N *Neuron) synapse_del(N2 *Neuron) {
 	delete(N2.outs, N)
 	delete(N.in, N2)
@@ -168,6 +182,24 @@ func (N *Neuron) synapse_del(N2 *Neuron) {
 	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen().
 	// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
 	// Чтобы погасить горутину N.listen() можно посылать какое-то спецзначение (чтобы не создавать отдельный управляющий сигнал.).
+}
+
+func (N *Neuron) synapse_del_random() {
+	N2, err := N.get_random_synapse()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	N.synapse_del(N2)
+}
+
+func (NN *NeurNet) synapse_del_random() {
+	if NN.n_linked == 0 {
+		panic("AAAAAaaaaaa")
+	}
+	i := r.Intn(NN.n_linked)
+	N := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
+	N.synapse_del_random()
 }
 
 /*
@@ -375,6 +407,10 @@ func main() {
 			}
 			if input == 31339 {
 				(&NN).weight_change_random()
+				continue
+			}
+			if input == 31340 {
+				(&NN).synapse_del_random()
 				continue
 			}
 
