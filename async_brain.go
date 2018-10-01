@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync" // Mutex
-	//"time"
+	"time"
 )
 
 //var debug int32 = 1
@@ -191,15 +191,23 @@ func (N *Neuron) synapse_del_random() {
 		return
 	}
 	N.synapse_del(N2)
+	// Нейрон без связей будет удален в NN.synapse_del_random()
 }
 
 func (NN *NeurNet) synapse_del_random() {
 	if NN.n_linked == 0 {
-		panic("AAAAAaaaaaa")
+		panic("synapse_del_random(): we have no linked neurons.")
 	}
 	i := r.Intn(NN.n_linked)
 	N := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
 	N.synapse_del_random()
+	// Если это внутренний нейрон и у него не осталось синапсов, то удаляем его (но не выходной)
+	//FIXME // Может быть вообще этого не стоит делать ???
+	if len(N.weight) == 0 {
+		if NN.get_index(N) >= NN.n_in+NN.n_int {
+			NN.neuron_del(N)
+		}
+	}
 }
 
 /*
@@ -260,6 +268,7 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 	if N.in_ch != nil {
 		// Sending 31337 intoincoming chanel stops the listen thread of neuron.
 		N.in_ch <- Signal{nil, 31337}
+		time.Sleep(1 * time.Second) // Время на получение обработку сигнала 31337
 		close(N.in_ch)
 	}
 }
