@@ -312,8 +312,8 @@ func (NN *NeurNet) listen(N *Neuron) {
 			// На дополнительном неблокирующем чтении мы экономим лишние вызовы calc().
 			//fmt.Println("!!! Unblocked read !!! It's wonderfull !!!", sig)
 		default:
-			N.calc()
 		}
+		N.calc()
 	}
 }
 
@@ -379,7 +379,7 @@ func main() {
 
 	// Читаем клаву. Ждем команд или входов в n0
 	for {
-		out("000")
+		//out("000")
 		n0 = &(NN.In[0])
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter command or input for n0: ")
@@ -399,11 +399,11 @@ func main() {
 		}
 		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
-			fmt.Println("_sigmoid_(", input, "):", _sigmoid_(input))
-			out("a00")
-			fmt.Println("n0.outs =", n0.outs)
-
-			out("a01")
+			//fmt.Println("_sigmoid_(", input, "):", _sigmoid_(input))
+			//out("a00")
+			//fmt.Println("n0.outs =", n0.outs)
+			//
+			//out("a01")
 			if input == 31337 {
 				out("a02")
 				(&NN).neuron_del_random()
