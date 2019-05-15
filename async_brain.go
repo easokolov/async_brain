@@ -138,23 +138,16 @@ func (NN *NeurNet) weight_change_random() {
 	n.weight_change_random()
 }
 
-// func (NN *NeurNet) synapse_add_random() {
-// 	i := r.Intn(NN.n_linked)
-// 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
-// 	if _, ok := NN.Deleted[n]; ok {
-// 		return // skip deleted neurons
-// 	}
-// 	if len(n.weight) < NN.max_syn {
-// 		n_target := &(NN.Neur[r.Intn(NN.n_neur)])
-// 		if _, ok := NN.Deleted[n_target]; ok {
-// 			return // skip deleted neurons
-// 		}
-// 		n.link_with(n_target, -3.0+r.Float64()*6.0)
-// 	} else {
-// 		out("Neuron synapses limit is exceeded.")
-// 	}
-// }
-//
+func (NN *NeurNet) synapse_add_random() {
+	n := NN.Linked[r.Intn(NN.n_linked)] // Synapse will be added for n (random Linked neuron)
+	if len(n.weight) < NN.max_syn {
+		n_target := NN.Neur[r.Intn(NN.n_neur)]
+		n.link_with(n_target, -3.0+r.Float64()*6.0)
+	} else {
+		out(fmt.Sprintf("Neuron synapses limit is exceeded for %p.", n))
+	}
+}
+
 // // Возвращает указатель на нейрон N2, к которому ведет случайный синапс нейрона N.
 // func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
 // 	if len(N.weight) == 0 {
@@ -435,10 +428,10 @@ func main() {
 			//	out("a03")
 			//	continue
 			//}
-			//if input == 31338 {
-			//	(&NN).synapse_add_random()
-			//	continue
-			//}
+			if input == 31338 {
+				(&NN).synapse_add_random()
+				continue
+			}
 			if input == 31339 {
 				(&NN).weight_change_random()
 				continue
