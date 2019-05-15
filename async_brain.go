@@ -18,6 +18,10 @@ import (
 //var debug int32 = 1
 var r *rand.Rand = rand.New(rand.NewSource(111237))
 
+func round3(f float64) float64 {
+	return math.Trunc(f*1000) / 1000
+}
+
 func _sigmoid_(f float64) float64 {
 	/*
 		// Сигмоидальная переходная функция нейрона
@@ -110,32 +114,30 @@ func (N *Neuron) calc() {
 	}
 }
 
-//
-// /* ---=== Mutation ===--- */
-// // Произвольно меняем вес произвольного синапса нейрона N на случайную дельту (от -0.05 до 0.05).
-// // В одном случае из 10 дельта увеличиваеся в диапазоне от -0.5 до 0.5
-// func (N *Neuron) weight_change_random() {
-// 	index := r.Intn(len(N.weight)) // Выбираем случайный синапс
-// 	i := 0
-// 	for n, _ := range N.weight {
-// 		if i == index {
-// 			multiplier := 0.1
-// 			if r.Intn(10) == 9 {
-// 				multiplier = 1.0
-// 			}
-// 			N.weight[n] += (r.Float64() - 0.5) * multiplier
-// 			break
-// 		}
-// 		i++
-// 	}
-// }
-//
-// func (NN *NeurNet) weight_change_random() {
-// 	i := r.Intn(NN.n_linked)
-// 	n := &(NN.Linked[i]) // Weight will be changed for n (random Linked neuron)
-// 	n.weight_change_random()
-// }
-//
+/* ---=== Mutation ===--- */
+// Произвольно меняем вес произвольного синапса нейрона N на случайную дельту (от -0.05 до 0.05).
+// В одном случае из 10 дельта увеличиваеся в диапазоне от -0.5 до 0.5
+func (N *Neuron) weight_change_random() {
+	index := r.Intn(len(N.weight)) // Выбираем случайный синапс
+	i := 0
+	for n, _ := range N.weight {
+		if i == index {
+			multiplier := 0.1
+			if r.Intn(10) == 9 {
+				multiplier = 1.0
+			}
+			N.weight[n] += (r.Float64() - 0.5) * multiplier
+			break
+		}
+		i++
+	}
+}
+
+func (NN *NeurNet) weight_change_random() {
+	n := NN.Linked[r.Intn(NN.n_linked)] // Weight will be changed for n (random Linked neuron)
+	n.weight_change_random()
+}
+
 // func (NN *NeurNet) synapse_add_random() {
 // 	i := r.Intn(NN.n_linked)
 // 	n := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
@@ -397,7 +399,23 @@ func main() {
 		if text[0] == 'p' {
 			fmt.Printf("In:\t%p:\t%+v\n", NN.In, NN.In)
 			fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
-			fmt.Printf("Out:\t%p:\t%+v\n\n", NN.Out, NN.Out)
+			for _, n := range NN.Int {
+				var w []float64
+				for _, ww := range n.weight {
+					w = append(w, round3(ww))
+				}
+				fmt.Printf("%v\t", w)
+			}
+			fmt.Printf("\n")
+			fmt.Printf("Out:\t%p:\t%+v\n", NN.Out, NN.Out)
+			for _, n := range NN.Out {
+				var w []float64
+				for _, ww := range n.weight {
+					w = append(w, round3(ww))
+				}
+				fmt.Printf("%v\t", w)
+			}
+			fmt.Printf("\n\n")
 			continue
 		}
 		if text[0] == 'e' {
@@ -421,10 +439,10 @@ func main() {
 			//	(&NN).synapse_add_random()
 			//	continue
 			//}
-			//if input == 31339 {
-			//	(&NN).weight_change_random()
-			//	continue
-			//}
+			if input == 31339 {
+				(&NN).weight_change_random()
+				continue
+			}
 			//if input == 31340 {
 			//	(&NN).synapse_del_random()
 			//	continue
