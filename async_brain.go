@@ -163,21 +163,21 @@ func (NN *NeurNet) synapse_add_random() {
 // 	}
 // 	return N2, nil
 // }
-//
-// // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
-// func (N *Neuron) synapse_del(N2 *Neuron) {
-// 	delete(N2.outs, N)
-// 	delete(N.in, N2)
-// 	delete(N.weight, N2)
-// 	//if len(N.in) == 0 {
-// 	//	N.in_ch <- Signal{nil, 31337}
-// 	//}
-// 	// Дернуть neuron_del() должен вызывающий synapse_del()
-// 	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen().
-// 	// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
-// 	// Чтобы погасить горутину N.listen() можно посылать какое-то спецзначение (чтобы не создавать отдельный управляющий сигнал.).
-// }
-//
+
+// У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
+func (N *Neuron) synapse_del(N2 *Neuron) {
+	delete(N2.outs, N)
+	delete(N.in, N2)
+	delete(N.weight, N2)
+	if len(N.in) == 0 {
+		N.in_ch <- Signal{nil, 31337}
+	}
+	// Дернуть neuron_del() должен вызывающий synapse_del()
+	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen().
+	// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
+	// Чтобы погасить горутину N.listen() можно посылать какое-то спецзначение (чтобы не создавать отдельный управляющий сигнал.).
+}
+
 // func (N *Neuron) synapse_del_random() {
 // 	N2, err := N.get_random_synapse()
 // 	if err != nil {
@@ -282,14 +282,15 @@ func (NN *NeurNet) synapse_add_random() {
 // If queue is empty (select default), then we do calc().
 // receive() just doing every select must to do (for reducing the code).
 func (NN *NeurNet) listen(N *Neuron) {
+	defer out(fmt.Sprintf("%p.listen() closed!", N))
 	// if receive() returns false, then listen() should be exit too.
 	receive := func(N *Neuron, sig Signal) bool {
 		if sig.val == 31337 && sig.source == nil {
 			//NN.neuron_del(N)
-			return (false)
+			return (false) // Выход из listen()
 		}
 		N.in[sig.source] = sig.val
-		return (true)
+		return (true) // Продолжить listen()
 	}
 
 	for {
@@ -351,15 +352,44 @@ func out(s string) {
 	fmt.Println(s)
 }
 
+func (NN *NeurNet) Print() {
+	fmt.Printf("%+v\n\n", NN)
+	for i, n := range NN.In {
+		fmt.Printf("NN.In[%v]  = %+v\n", i, n)
+	}
+	for i, n := range NN.Int {
+		fmt.Printf("NN.Int[%v]  = %+v\n", i, n)
+	}
+	for i, n := range NN.Out {
+		fmt.Printf("NN.Out[%v]  = %+v\n", i, n)
+	}
+}
+
+func (NN *NeurNet) Print_weights() {
+	fmt.Printf("In:\t%p:\t%+v\n", NN.In, NN.In)
+	fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
+	for _, n := range NN.Int {
+		var w []float64
+		for _, ww := range n.weight {
+			w = append(w, round3(ww))
+		}
+		fmt.Printf("%v\t", w)
+	}
+	fmt.Printf("\n")
+	fmt.Printf("Out:\t%p:\t%+v\n", NN.Out, NN.Out)
+	for _, n := range NN.Out {
+		var w []float64
+		for _, ww := range n.weight {
+			w = append(w, round3(ww))
+		}
+		fmt.Printf("%v\t", w)
+	}
+	fmt.Printf("\n\n")
+}
+
 func main() {
 	var NN NeurNet = nn_random_constructor(1, 3, 1, 3)
-	fmt.Println(NN)
-	fmt.Printf("\n%+v\n\n", NN)
-	fmt.Printf("NN.In[0]  = %+v\n", NN.In[0])
-	fmt.Printf("NN.Int[0] = %+v\n", NN.Int[0])
-	fmt.Printf("NN.Int[1] = %+v\n", NN.Int[1])
-	fmt.Printf("NN.Int[2] = %+v\n", NN.Int[2])
-	fmt.Printf("NN.Out[0] = %+v\n", NN.Out[0])
+	(&NN).Print()
 
 	// !!! Пока NN.Neur был массив структур, а не массив указателей, то делая 'for _,n := range NN.Linked', в n была копия нейрона.
 	// Работа.
@@ -390,25 +420,11 @@ func main() {
 			return
 		}
 		if text[0] == 'p' {
-			fmt.Printf("In:\t%p:\t%+v\n", NN.In, NN.In)
-			fmt.Printf("Int:\t%p:\t%+v\n", NN.Int, NN.Int)
-			for _, n := range NN.Int {
-				var w []float64
-				for _, ww := range n.weight {
-					w = append(w, round3(ww))
-				}
-				fmt.Printf("%v\t", w)
+			if text[1] == 'p' {
+				(&NN).Print()
+			} else {
+				(&NN).Print_weights()
 			}
-			fmt.Printf("\n")
-			fmt.Printf("Out:\t%p:\t%+v\n", NN.Out, NN.Out)
-			for _, n := range NN.Out {
-				var w []float64
-				for _, ww := range n.weight {
-					w = append(w, round3(ww))
-				}
-				fmt.Printf("%v\t", w)
-			}
-			fmt.Printf("\n\n")
 			continue
 		}
 		if text[0] == 'e' {
@@ -436,10 +452,12 @@ func main() {
 				(&NN).weight_change_random()
 				continue
 			}
-			//if input == 31340 {
-			//	(&NN).synapse_del_random()
-			//	continue
-			//}
+			if input == 31340 {
+				//(&NN).synapse_del_random()
+				(&NN).Int[0].synapse_del(NN.In[0])
+				(&NN).Int[0].synapse_del(NN.Int[0])
+				continue
+			}
 
 			n0.in_ch <- Signal{nil, input}
 			//for _, c := range n0.outs {
