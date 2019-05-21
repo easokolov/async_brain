@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 	//"sync" // Mutex
-	//"time"
+	"time"
 )
 
 //var debug int32 = 1
@@ -20,6 +20,11 @@ var r *rand.Rand = rand.New(rand.NewSource(111237))
 
 func round3(f float64) float64 {
 	return math.Trunc(f*1000) / 1000
+}
+
+func remove(slice []*Neuron, i int) []*Neuron {
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
 }
 
 func _sigmoid_(f float64) float64 {
@@ -169,13 +174,10 @@ func (N *Neuron) synapse_del(N2 *Neuron) {
 	delete(N2.outs, N)
 	delete(N.in, N2)
 	delete(N.weight, N2)
-	if len(N.in) == 0 {
-		N.in_ch <- Signal{nil, 31337}
-	}
-	// Дернуть neuron_del() должен вызывающий synapse_del()
-	//FIXME Если удаляется последний входящий синапс, то мы должны погасить N.listen().
-	// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
-	// Чтобы погасить горутину N.listen() можно посылать какое-то спецзначение (чтобы не создавать отдельный управляющий сигнал.).
+	// Если удаляется последний входящий синапс, то
+	// дернуть neuron_del() должен вызывающий synapse_del()
+	// Т.к. neuron_del() может дергаться и самостоятельно,
+	// и в этом случае он должен вызывать synapse_del().
 }
 
 // func (N *Neuron) synapse_del_random() {
@@ -219,63 +221,66 @@ func (N *Neuron) synapse_del(N2 *Neuron) {
 //
 // }
 // */
-//
-// func (NN *NeurNet) neuron_del_random() {
-// 	for k := 0; k < 3; k++ { // три попытки найти подходящий удаляемый нейрон.
-// 		i := r.Intn(NN.n_int)
-// 		n := &(NN.Int[i])
-// 		if _, ok := NN.Deleted[n]; ok {
-// 			continue // this neuron is olready deleted. Try again
-// 		}
-// 		NN.neuron_del(n)
-// 	}
-// }
-//
-// //FIXME
-// // После удаления нейрона остальные смещаются и ИЗМЕНЯЮТ свой адрес. Но старый адрес уже прописан в Out и Weight итп. Здесь, ТОЧНО, происходит сбой.
-// // Надо либо перечитывать и переписывать все указатели (но это ломает всю модель, т.к. у нас нет никакойм общей блокировки НС), либо избавиться от удаления нейронов. Может быть только помечать их как удаленные или не удалять вообще.
-// // Еще вариант, перевести схему связи нейронов с указателей на индексы, как в сишной версии.
-// // Но это тоже потребует блокировки связанных нейронов для переписывания у них индексов в weight, In и Out.
-// // Решил при удалении не делать сдвиг, а записывать индекс удаленного нейрона в NN.Deleted.
-// // При сохранении НС в файл мы будем самостоятельно составлять карту НС не через указатели, а через индексы,
-// // где и проведем процедуру учета удаленных нейронов (пробежимся по всем связям и уменьшим индексы, которые выше индексов удаленных нейронов).
-// // Так что, память полностью освободится только у потомков.
-// // Neur_Remove
-// func (NN *NeurNet) neuron_del(N *Neuron) {
-// 	if _, ok := NN.Deleted[N]; ok {
-// 		return
-// 	}
-// 	NN.Deleted[N] = NN.get_index(N)
-// 	fmt.Println("Neuron", N, "would be stopped!")
-// 	// If there is something in N.in or N.outs, we should itterate it and remove synapses.
-// 	for n, _ := range N.weight {
-// 		N.synapse_del(n)
-// 	}
-// 	for n, _ := range N.outs {
-// 		n.synapse_del(N)
-// 	}
-// 	N.in = nil
-// 	N.weight = nil
-// 	N.outs = nil
-//
-// 	// Раньше у входных нейронов не было входного канала и для них не надо было посылать 31337.
-// 	// Сейчас не актуально, но проверка на всякий случай пусть будет.
-// 	if N.in_ch != nil {
-// 		// Sending 31337 intoincoming chanel stops the listen thread of neuron.
-// 		N.in_ch <- Signal{nil, 31337}
-// 		time.Sleep(1 * time.Second) // Время на получение обработку сигнала 31337
-// 		close(N.in_ch)
-// 	}
-// }
-//
-// func (NN *NeurNet) get_index(N *Neuron) int {
-// 	for i, _ := range NN.Neur {
-// 		if &(NN.Neur[i]) == N {
-// 			return i
-// 		}
-// 	}
-// 	return -1
-// }
+
+// Удалить случайный внутренний нейрон.
+func (NN *NeurNet) neuron_del_random() {
+	NN.neuron_del(NN.Int[r.Intn(NN.n_int)])
+}
+
+// при удалении нейрона надо удалить все синапсы, если они есть, погасить N.listen(),
+// Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
+// Чтобы погасить горутину N.listen() будем посылать спецзначение 31337
+// (чтобы не создавать отдельный управляющий сигнал).
+func (NN *NeurNet) neuron_del(N *Neuron) {
+	out(fmt.Sprintf("Neuron %p would be stopped!", N))
+	// If there is something in N.in or N.outs, we should itterate it and remove synapses.
+	for n, _ := range N.weight {
+		N.synapse_del(n)
+	}
+	for n, _ := range N.outs {
+		n.synapse_del(N)
+	}
+	N.in = nil
+	N.weight = nil
+	N.outs = nil
+
+	// Раньше у входных нейронов не было входного канала и для них не надо было посылать 31337.
+	// Сейчас не актуально, но проверка на всякий случай пусть будет.
+	if N.in_ch != nil {
+		// Sending 31337 into incoming chanel stops the listen thread of neuron.
+		N.in_ch <- Signal{nil, 31337}
+		time.Sleep(1 * time.Second) // Время на получение обработку сигнала 31337
+		close(N.in_ch)
+	}
+
+	index := NN.get_index(N)
+	if index < 0 {
+		out(fmt.Sprintf("Neuron %p not in NN.Neur", N))
+		return
+	} else if index < NN.n_in {
+		NN.Neur = remove(NN.Neur, index)
+		NN.set_slices(NN.n_in-1, NN.n_int, NN.n_out)
+	} else if index < NN.n_in+NN.n_int {
+		NN.Neur = remove(NN.Neur, index)
+		NN.set_slices(NN.n_in, NN.n_int-1, NN.n_out)
+	} else if index < NN.n_in+NN.n_int+NN.n_out {
+		NN.Neur = remove(NN.Neur, index)
+		NN.set_slices(NN.n_in, NN.n_int, NN.n_out-1)
+	} else {
+		out(fmt.Sprintf("index %v of neuron %p out of NN.Neur!!! Imposible!!!", index, N))
+		return
+	}
+}
+
+// Returns index of N in NN.Neur or -1 if not found.
+func (NN *NeurNet) get_index(N *Neuron) int {
+	for i, n := range NN.Neur {
+		if N == n {
+			return (i)
+		}
+	}
+	return (-1)
+}
 
 // First is blocking select, which gets one Signal.
 // Then goes unblocking select, which gets other Signals if they are already in queue.
@@ -286,7 +291,6 @@ func (NN *NeurNet) listen(N *Neuron) {
 	// if receive() returns false, then listen() should be exit too.
 	receive := func(N *Neuron, sig Signal) bool {
 		if sig.val == 31337 && sig.source == nil {
-			//NN.neuron_del(N)
 			return (false) // Выход из listen()
 		}
 		N.in[sig.source] = sig.val
@@ -313,22 +317,27 @@ func (NN *NeurNet) listen(N *Neuron) {
 	}
 }
 
-func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
-	var NN NeurNet
+func (NN *NeurNet) set_slices(n_in, n_int, n_out int) {
 	NN.n_in = n_in
 	NN.n_int = n_int
 	NN.n_out = n_out
 	NN.n_linked = n_int + n_out
+	NN.n_neur = n_in + n_int + n_out
+	NN.In = NN.Neur[:n_in]
+	NN.Int = NN.Neur[n_in : n_in+n_int]
+	NN.Out = NN.Neur[n_in+n_int:]
+	NN.Linked = NN.Neur[n_in:]
+}
+
+func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
+	var NN NeurNet
 	NN.max_syn = max_syn
 	NN.n_neur = n_in + n_int + n_out
 	NN.Neur = make([]*Neuron, 0)
 	for i := 0; i < NN.n_neur; i++ {
 		NN.Neur = append(NN.Neur, new(Neuron))
 	}
-	NN.In = NN.Neur[:n_in]
-	NN.Int = NN.Neur[n_in : n_in+n_int]
-	NN.Out = NN.Neur[n_in+n_int:]
-	NN.Linked = NN.Neur[n_in:]
+	(&NN).set_slices(n_in, n_int, n_out)
 	for i, n := range NN.Neur {
 		n.in_ch = make(chan Signal, max_syn)      // Один входной канал для всех синапсов емкостью max_syn.
 		n.outs = make(map[*Neuron]chan Signal, 1) // Выходные сигналы. Можно задать начальную емкость.
@@ -454,8 +463,9 @@ func main() {
 			}
 			if input == 31340 {
 				//(&NN).synapse_del_random()
-				(&NN).Int[0].synapse_del(NN.In[0])
-				(&NN).Int[0].synapse_del(NN.Int[0])
+				//(&NN).Int[0].synapse_del(NN.In[0])
+				//(&NN).Int[0].synapse_del(NN.Int[0])
+				(&NN).neuron_del_random()
 				continue
 			}
 
