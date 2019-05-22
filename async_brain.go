@@ -153,21 +153,21 @@ func (NN *NeurNet) synapse_add_random() {
 	}
 }
 
-// // Возвращает указатель на нейрон N2, к которому ведет случайный синапс нейрона N.
-// func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
-// 	if len(N.weight) == 0 {
-// 		return nil, fmt.Errorf("get_random_synapse(): Neuron %v doesn't have any synapse", N)
-// 	}
-// 	index := r.Intn(len(N.weight))
-// 	i := 0
-// 	for N2, _ = range N.weight {
-// 		if i == index {
-// 			break
-// 		}
-// 		i++
-// 	}
-// 	return N2, nil
-// }
+// Возвращает указатель на нейрон N2, к которому ведет случайный синапс нейрона N.
+func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
+	if len(N.weight) == 0 {
+		return nil, fmt.Errorf("get_random_synapse(): Neuron %v doesn't have any synapse", N)
+	}
+	index := r.Intn(len(N.weight))
+	i := 0
+	for N2, _ = range N.weight {
+		if i == index {
+			break
+		}
+		i++
+	}
+	return N2, nil
+}
 
 // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
 func (N *Neuron) synapse_del(N2 *Neuron) {
@@ -180,32 +180,31 @@ func (N *Neuron) synapse_del(N2 *Neuron) {
 	// и в этом случае он должен вызывать synapse_del().
 }
 
-// func (N *Neuron) synapse_del_random() {
-// 	N2, err := N.get_random_synapse()
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return
-// 	}
-// 	N.synapse_del(N2)
-// 	// Нейрон без связей будет удален в NN.synapse_del_random()
-// }
-//
-// func (NN *NeurNet) synapse_del_random() {
-// 	if NN.n_linked == 0 {
-// 		panic("synapse_del_random(): we have no linked neurons.")
-// 	}
-// 	i := r.Intn(NN.n_linked)
-// 	N := &(NN.Linked[i]) // Synapse will be added for n (random Linked neuron)
-// 	N.synapse_del_random()
-// 	// Если это внутренний нейрон и у него не осталось синапсов, то удаляем его (но не выходной)
-// 	//FIXME // Может быть вообще этого не стоит делать ???
-// 	if len(N.weight) == 0 {
-// 		if NN.get_index(N) >= NN.n_in+NN.n_int {
-// 			NN.neuron_del(N)
-// 		}
-// 	}
-// }
-//
+func (N *Neuron) synapse_del_random() {
+	N2, err := N.get_random_synapse()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	N.synapse_del(N2)
+	// Нейрон без связей будет удален в NN.synapse_del_random()
+	// т.к. здесь мы не имеем указателя NN
+}
+
+func (NN *NeurNet) synapse_del_random() {
+	if NN.n_linked == 0 {
+		panic("synapse_del_random(): we have no linked neurons.")
+	}
+	N := NN.Linked[r.Intn(NN.n_linked)] // Synapse will be deleted for N (random Linked neuron)
+	N.synapse_del_random()
+	// Если это внутренний нейрон и у него не осталось синапсов, то удаляем его (но не выходной)
+	if len(N.weight) == 0 {
+		if NN.get_index(N) < NN.n_in+NN.n_int {
+			NN.neuron_del(N)
+		}
+	}
+}
+
 // /*
 //
 // func (NN *NeurNet) neuron_add_random() {
@@ -470,11 +469,13 @@ func main() {
 				continue
 			}
 			if input == 31340 {
-				//(&NN).synapse_del_random()
-				//(&NN).Int[0].synapse_del(NN.In[0])
-				//(&NN).Int[0].synapse_del(NN.Int[0])
 				(&NN).neuron_del_random()
 				continue
+			}
+			if input == 31341 {
+				(&NN).synapse_del_random()
+				//(&NN).Int[0].synapse_del(NN.In[0])
+				//(&NN).Int[0].synapse_del(NN.Int[0])
 			}
 
 			n0.in_ch <- Signal{nil, input}
