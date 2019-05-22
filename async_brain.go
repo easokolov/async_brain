@@ -239,6 +239,14 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 	}
 	for n, _ := range N.outs {
 		n.synapse_del(N)
+		// Если это был единственный синапс у n (некий нейрон, бурещий сигнал у N),
+		// то такой нейрон можно удалить. Но не стоит каскадно удалять входные и выходные нейроны.
+		if len(n.weight) == 0 {
+			ind := NN.get_index(n)
+			if ind >= NN.n_in && ind < NN.n_in+NN.n_int {
+				NN.neuron_del(n)
+			}
+		}
 	}
 	N.in = nil
 	N.weight = nil
