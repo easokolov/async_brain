@@ -449,17 +449,10 @@ func main() {
 		}
 		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
-			////fmt.Println("_sigmoid_(", input, "):", _sigmoid_(input))
-			////out("a00")
-			////fmt.Println("n0.outs =", n0.outs)
-			////
-			////out("a01")
-			//if input == 31337 {
-			//	out("a02")
-			//	(&NN).neuron_del_random()
-			//	out("a03")
-			//	continue
-			//}
+			if input == 31337 {
+				(&NN).neuron_del_random()
+				continue
+			}
 			if input == 31338 {
 				(&NN).synapse_add_random()
 				continue
@@ -469,13 +462,10 @@ func main() {
 				continue
 			}
 			if input == 31340 {
-				(&NN).neuron_del_random()
-				continue
-			}
-			if input == 31341 {
 				(&NN).synapse_del_random()
 				//(&NN).Int[0].synapse_del(NN.In[0])
 				//(&NN).Int[0].synapse_del(NN.Int[0])
+				continue
 			}
 
 			n0.in_ch <- Signal{nil, input}
