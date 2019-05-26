@@ -206,12 +206,33 @@ func (NN *NeurNet) synapse_del_random() {
 }
 
 // /*
-//
-// func (NN *NeurNet) neuron_add_random() {
-//	//Должно строиться на основе NN.Neur = append(NN.Neur, new(Neuron))
-//	//только со смещением Out-нейронов в конец и переопределением слайсов Int, Out, Linked
-// }
-//
+
+func (NN *NeurNet) neuron_add_random() {
+	//Должно строиться на основе NN.Neur = append(NN.Neur, new(Neuron))
+	//только со смещением Out-нейронов в конец и переопределением слайсов Int, Out, Linked
+	NN.Neur = append(NN.Neur, nil)
+	// Смещаем out-нейроны в конец (copy(dst, src)).
+	NN.set_slices(NN.n_in, NN.n_int+1, NN.n_out)
+	ncopy := copy(NN.Neur[NN.n_neur-NN.n_out:NN.n_neur], NN.Neur[NN.n_neur-NN.n_out-1:NN.n_neur-1])
+	if ncopy == NN.n_out {
+		out(fmt.Sprintf("!!! OK! NN.n_out (%v) neurons copied.", NN.n_out))
+	} else {
+		out(fmt.Sprintf("!!! BAD! %v neurons copied. (!= NN.n_out (%v)).", ncopy, NN.n_out))
+	}
+	// Переопределяем последний int-нейрон (создаем новый)
+	newi := NN.n_in + NN.n_int - 1 // index of new internal newron.
+	NN.Neur[newi] = new(Neuron)
+	NN.Neur[newi].in_ch = make(chan Signal, NN.max_syn)   // Один входной канал для всех синапсов емкостью max_syn.
+	NN.Neur[newi].outs = make(map[*Neuron]chan Signal, 1) // Выходные сигналы. Можно задать начальную емкость.
+	NN.Neur[newi].in = make(map[*Neuron]float64, 1)       // Кэш входных сигналов по указателю отправителя.
+	NN.Neur[newi].weight = make(map[*Neuron]float64, 1)   // Карта весов по указателю отправителя.
+	//for j := 0; j <= r.Intn(NN.max_syn); j++ {          // Создаем до max_syn рэндомных синапсов нового нейрона. (кажется, это слишком жирно. Слишком большое изменение)
+	for j := 0; j <= r.Intn(2); j++ { // Создаем до 2 рэндомных синапсов нового нейрона. (Пока будем созавать 1-2 синапса, а не до max_syn)
+		NN.Neur[newi].link_with(NN.Neur[r.Intn(NN.n_neur)], -3.0+r.Float64()*6.0)
+	}
+	NN.Linked[r.Intn(NN.n_linked)].link_with(NN.Neur[newi], -3.0+r.Float64()*6.0) // Создаем для рэндомного Linked-нейрона синапс на новый нейрон.
+}
+
 // func (NN *NeurNet) dump(finlename str) {
 //
 // }
@@ -465,6 +486,12 @@ func main() {
 				(&NN).synapse_del_random()
 				//(&NN).Int[0].synapse_del(NN.In[0])
 				//(&NN).Int[0].synapse_del(NN.Int[0])
+				continue
+			}
+			if input == 31341 {
+				fmt.Println(len(NN.Neur))
+				(&NN).neuron_add_random()
+				fmt.Println(len(NN.Neur))
 				continue
 			}
 
