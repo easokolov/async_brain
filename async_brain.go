@@ -16,7 +16,8 @@ import (
 )
 
 //var debug int32 = 1
-var r *rand.Rand = rand.New(rand.NewSource(111237))
+//var r *rand.Rand = rand.New(rand.NewSource(111237))
+var r *rand.Rand = rand.New(rand.NewSource(111236))
 
 func round3(f float64) float64 {
 	return math.Trunc(f*1000) / 1000
@@ -215,7 +216,7 @@ func (NN *NeurNet) neuron_add_random() {
 	NN.set_slices(NN.n_in, NN.n_int+1, NN.n_out)
 	ncopy := copy(NN.Neur[NN.n_neur-NN.n_out:NN.n_neur], NN.Neur[NN.n_neur-NN.n_out-1:NN.n_neur-1])
 	if ncopy == NN.n_out {
-		out(fmt.Sprintf("!!! OK! NN.n_out (%v) neurons copied.", NN.n_out))
+		//out(fmt.Sprintf("!!! OK! NN.n_out (%v) neurons copied.", NN.n_out))
 	} else {
 		out(fmt.Sprintf("!!! BAD! %v neurons copied. (!= NN.n_out (%v)).", ncopy, NN.n_out))
 	}
@@ -231,6 +232,7 @@ func (NN *NeurNet) neuron_add_random() {
 		NN.Neur[newi].link_with(NN.Neur[r.Intn(NN.n_neur)], -3.0+r.Float64()*6.0)
 	}
 	NN.Linked[r.Intn(NN.n_linked)].link_with(NN.Neur[newi], -3.0+r.Float64()*6.0) // Создаем для рэндомного Linked-нейрона синапс на новый нейрон.
+    out(fmt.Sprintf("Random neuron added. %v in-, %v internal-, %v out- neurons now.", NN.n_in, NN.n_int, NN.n_out))
 }
 
 // func (NN *NeurNet) dump(finlename str) {
@@ -489,9 +491,7 @@ func main() {
 				continue
 			}
 			if input == 31341 {
-				fmt.Println(len(NN.Neur))
 				(&NN).neuron_add_random()
-				fmt.Println(len(NN.Neur))
 				continue
 			}
 
