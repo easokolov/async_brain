@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	//"sync" // Mutex
+	"encoding/json"
 	"time"
 )
 
@@ -75,6 +76,69 @@ type NeurNet struct {
 	Out    []*Neuron
 	Linked []*Neuron
 	//mutex   sync.Mutex
+}
+
+func (NN *NeurNet) Dump(filePath string) error {
+	type NeurIndex int
+	type DumpedNeuron struct {
+		In      map[NeurIndex]float64 // Кэш входных значений
+		Weight  map[NeurIndex]float64 // Веса по указателям источников.
+		Outs    []NeurIndex           // Выходные каналы
+		Out     float64               // Последнее выходное значение.
+		Pre_out float64               // Предыдущее выходное значение.
+	}
+	type DumpedNeurNet struct {
+		N_in     int
+		N_int    int
+		N_out    int
+		Max_syn  int
+		N_linked int
+		N_neur   int
+		Neur     []DumpedNeuron
+	}
+	// nmap временная структура для быстрого поиска индексов нейронов в NN.Neur по их указателю.
+	nmap := make(map[*Neuron]NeurIndex)
+	for i, n := range NN.Neur {
+		nmap[n] = NeurIndex(i)
+	}
+	// Копируем данные из NN в DNN c заменой указателей нейронов на индексы. Дампить будем DNN.
+	var DNN DumpedNeurNet
+	DNN.N_in = NN.n_in
+	DNN.N_int = NN.n_int
+	DNN.N_out = NN.n_out
+	DNN.Max_syn = NN.max_syn
+	DNN.N_linked = NN.n_linked
+	DNN.N_neur = NN.n_neur
+	DNN.Neur = make([]DumpedNeuron, NN.n_neur)
+	for i, n := range NN.Neur {
+		// Копаирует NN.Neur[*].in в DNN.Neur[*].in с заменой указателей нейронов на индексы
+		DNN.Neur[i].In = make(map[NeurIndex]float64, len(n.in))
+		for k, v := range n.in {
+			DNN.Neur[i].In[nmap[k]] = v
+		}
+		// Копаирует NN.Neur[*].weight в DNN.Neur[*].weight с заменой указателей нейронов на индексы
+		DNN.Neur[i].Weight = make(map[NeurIndex]float64, len(n.weight))
+		for k, v := range n.weight {
+			DNN.Neur[i].Weight[nmap[k]] = v
+		}
+		// Копируем NN.Neur[*].outs в DNN.Neur[*].outs, только теперь это не маз указателя нейрона-получателя и его входного канала а только массив индексов получателей.
+		DNN.Neur[i].Outs = make([]NeurIndex, len(n.outs))
+		ind := 0
+		for k, _ := range n.outs {
+			DNN.Neur[i].Outs[ind] = nmap[k]
+			ind++
+		}
+		DNN.Neur[i].Out = n.out
+		DNN.Neur[i].Pre_out = n.pre_out
+	}
+
+	file, err := os.Create(filePath)
+	if err == nil {
+		encoder := json.NewEncoder(file)
+		encoder.Encode(DNN)
+	}
+	file.Close()
+	return err
 }
 
 // Связать нейрон N c нейроном N2 с весом weight
@@ -232,7 +296,7 @@ func (NN *NeurNet) neuron_add_random() {
 		NN.Neur[newi].link_with(NN.Neur[r.Intn(NN.n_neur)], -3.0+r.Float64()*6.0)
 	}
 	NN.Linked[r.Intn(NN.n_linked)].link_with(NN.Neur[newi], -3.0+r.Float64()*6.0) // Создаем для рэндомного Linked-нейрона синапс на новый нейрон.
-    out(fmt.Sprintf("Random neuron added. %v in-, %v internal-, %v out- neurons now.", NN.n_in, NN.n_int, NN.n_out))
+	out(fmt.Sprintf("Random neuron added. %v in-, %v internal-, %v out- neurons now.", NN.n_in, NN.n_int, NN.n_out))
 }
 
 // func (NN *NeurNet) dump(finlename str) {
@@ -492,6 +556,10 @@ func main() {
 			}
 			if input == 31341 {
 				(&NN).neuron_add_random()
+				continue
+			}
+			if input == 31342 {
+				(&NN).Dump("NN_dump.json")
 				continue
 			}
 
