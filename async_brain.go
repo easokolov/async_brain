@@ -14,11 +14,13 @@ import (
 	//"sync" // Mutex
 	"encoding/json"
 	"time"
+    "runtime"
 )
 
 //var debug int32 = 1
-//var r *rand.Rand = rand.New(rand.NewSource(111237))
-var r *rand.Rand = rand.New(rand.NewSource(111236))
+var r *rand.Rand = rand.New(rand.NewSource(111237))
+
+//var r *rand.Rand = rand.New(rand.NewSource(111236))
 
 func round3(f float64) float64 {
 	return math.Trunc(f*1000) / 1000
@@ -78,24 +80,25 @@ type NeurNet struct {
 	//mutex   sync.Mutex
 }
 
+type NeurIndex int
+type DumpedNeuron struct {
+	In      map[NeurIndex]float64 // Кэш входных значений
+	Weight  map[NeurIndex]float64 // Веса по указателям источников.
+	Outs    []NeurIndex           // Выходные каналы
+	Out     float64               // Последнее выходное значение.
+	Pre_out float64               // Предыдущее выходное значение.
+}
+type DumpedNeurNet struct {
+	N_in     int
+	N_int    int
+	N_out    int
+	Max_syn  int
+	N_linked int
+	N_neur   int
+	Neur     []DumpedNeuron
+}
+
 func (NN *NeurNet) Dump(filePath string) error {
-	type NeurIndex int
-	type DumpedNeuron struct {
-		In      map[NeurIndex]float64 // Кэш входных значений
-		Weight  map[NeurIndex]float64 // Веса по указателям источников.
-		Outs    []NeurIndex           // Выходные каналы
-		Out     float64               // Последнее выходное значение.
-		Pre_out float64               // Предыдущее выходное значение.
-	}
-	type DumpedNeurNet struct {
-		N_in     int
-		N_int    int
-		N_out    int
-		Max_syn  int
-		N_linked int
-		N_neur   int
-		Neur     []DumpedNeuron
-	}
 	// nmap временная структура для быстрого поиска индексов нейронов в NN.Neur по их указателю.
 	nmap := make(map[*Neuron]NeurIndex)
 	for i, n := range NN.Neur {
@@ -138,6 +141,53 @@ func (NN *NeurNet) Dump(filePath string) error {
 		encoder.Encode(DNN)
 	}
 	file.Close()
+	return err
+}
+
+func (NN *NeurNet) Load(filePath string) error {
+	DNN := new(DumpedNeurNet)
+	file, err := os.Open(filePath)
+	defer file.Close()
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(DNN)
+	if err != nil {
+		return err
+	}
+	//FIXME debug
+	//fmt.Printf("DNN = '%+v'\n", DNN)
+	NN.n_in = DNN.N_in
+	NN.n_int = DNN.N_int
+	NN.n_out = DNN.N_out
+	NN.max_syn = DNN.Max_syn
+	NN.n_linked = DNN.N_linked
+	NN.n_neur = DNN.N_neur
+
+	NN.Neur = make([]*Neuron, 0)
+	for i := 0; i < NN.n_neur; i++ {
+		NN.Neur = append(NN.Neur, new(Neuron))
+		NN.Neur[i].in_ch = make(chan Signal, NN.max_syn)
+	}
+	NN.set_slices(NN.n_in, NN.n_int, NN.n_out)
+	for i, n := range NN.Neur {
+		n.outs = make(map[*Neuron]chan Signal, len(DNN.Neur[i].Outs))
+		for _, ind := range DNN.Neur[i].Outs {
+			n.outs[NN.Neur[ind]] = NN.Neur[ind].in_ch
+		}
+		n.in = make(map[*Neuron]float64, len(DNN.Neur[i].In))
+		for ind, val := range DNN.Neur[i].In {
+			n.in[NN.Neur[ind]] = val
+		}
+		// Для входных нейронов это не нужно.
+		if i >= NN.n_in {
+			n.weight = make(map[*Neuron]float64, len(DNN.Neur[i].Weight))
+			for ind, val := range DNN.Neur[i].Weight {
+				n.weight[NN.Neur[ind]] = val
+			}
+		}
+	}
 	return err
 }
 
@@ -423,7 +473,7 @@ func (NN *NeurNet) set_slices(n_in, n_int, n_out int) {
 	NN.Linked = NN.Neur[n_in:]
 }
 
-func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
+func nn_random_constructor(n_in, n_int, n_out, max_syn int) *NeurNet {
 	var NN NeurNet
 	NN.max_syn = max_syn
 	NN.n_neur = n_in + n_int + n_out
@@ -446,7 +496,7 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) NeurNet {
 			n.link_with(NN.Neur[r.Intn(NN.n_neur)], -3.0+r.Float64()*6.0)
 		}
 	}
-	return NN
+	return &NN
 }
 
 //FIXME
@@ -491,18 +541,18 @@ func (NN *NeurNet) Print_weights() {
 }
 
 func main() {
-	var NN NeurNet = nn_random_constructor(1, 3, 1, 3)
-	(&NN).Print()
+	var NN *NeurNet = nn_random_constructor(1, 3, 1, 3)
+	//NN.Print()
 
 	// !!! Пока NN.Neur был массив структур, а не массив указателей, то делая 'for _,n := range NN.Linked', в n была копия нейрона.
 	// Работа.
 	for _, n := range NN.Linked {
-		go (&NN).listen(n)
+		go NN.listen(n)
 	}
 
 	// Входные нейроны теперь тоже имеют входной канал.
 	for _, n := range NN.In {
-		go (&NN).listen(n)
+		go NN.listen(n)
 	}
 
 	// Запуск
@@ -524,9 +574,9 @@ func main() {
 		}
 		if text[0] == 'p' {
 			if text[1] == 'p' {
-				(&NN).Print()
+				NN.Print()
 			} else {
-				(&NN).Print_weights()
+				NN.Print_weights()
 			}
 			continue
 		}
@@ -537,29 +587,63 @@ func main() {
 		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
 			if input == 31337 {
-				(&NN).neuron_del_random()
+				NN.neuron_del_random()
 				continue
 			}
 			if input == 31338 {
-				(&NN).synapse_add_random()
+				NN.synapse_add_random()
 				continue
 			}
 			if input == 31339 {
-				(&NN).weight_change_random()
+				NN.weight_change_random()
 				continue
 			}
 			if input == 31340 {
-				(&NN).synapse_del_random()
+				NN.synapse_del_random()
 				//(&NN).Int[0].synapse_del(NN.In[0])
 				//(&NN).Int[0].synapse_del(NN.Int[0])
 				continue
 			}
 			if input == 31341 {
-				(&NN).neuron_add_random()
+				NN.neuron_add_random()
 				continue
 			}
 			if input == 31342 {
-				(&NN).Dump("NN_dump.json")
+				NN.Dump("NN_dump.json")
+				continue
+			}
+			if input == 31343 {
+				if NN != nil {
+					for _, n := range NN.Neur {
+						n.in_ch <- Signal{nil, 31337}
+						time.Sleep(1 * time.Second) // Время на получение обработку сигнала 31337
+						close(n.in_ch)
+					}
+				}
+				NN = new(NeurNet)
+				NN.Load("1")
+				for _, n := range NN.Neur {
+					go NN.listen(n)
+				}
+				continue
+			}
+			if input == 31344 {
+				if NN != nil {
+					for _, n := range NN.Neur {
+						n.in_ch <- Signal{nil, 31337}
+						time.Sleep(1 * time.Second) // Время на получение обработку сигнала 31337
+						close(n.in_ch)
+					}
+				}
+				NN = new(NeurNet)
+				NN.Load("2")
+				for _, n := range NN.Neur {
+					go NN.listen(n)
+				}
+				continue
+			}
+			if input == 31345 {
+                runtime.GC() // Запустить GarbageCollector.
 				continue
 			}
 
