@@ -648,6 +648,7 @@ func main() {
 			}
 
 			n0.in_ch <- Signal{nil, input}
+			//NN.In[1].in_ch <- Signal{nil, input}
 			//for _, c := range n0.outs {
 			//	c <- Signal{n0, input}
 			//}
