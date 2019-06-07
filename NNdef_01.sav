@@ -36,6 +36,6 @@
     {"In": {"16": 0}, "Weight": {"16": -0.666}, "Outs": [], "Out": 0, "Pre_out": 1, "Descript": "out6: born and child_health"},
     {"In": {"15": 0}, "Weight": {"15": 9.999}, "Outs": [], "Out": 0, "Pre_out": 1, "Descript": "out7: eat"},
     {"In": {"1": 0}, "Weight": {"1": 0.001}, "Outs": [], "Out": 0, "Pre_out": 1, "Descript": "out8: pregnant"},
-    {"In": {"16": 0}, "Weight": {"16": 0.000}, "Outs": [], "Out": 0, "Pre_out": 1, "Descript": "out9: Get_Grad_Sit"},
+    {"In": {"16": 0}, "Weight": {"16": 0.000}, "Outs": [], "Out": 0, "Pre_out": 1, "Descript": "out9: Get_Grad_Sit"}
   ]
 }
