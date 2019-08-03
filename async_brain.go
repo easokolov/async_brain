@@ -13,8 +13,8 @@ import (
 	"strings"
 	//"sync" // Mutex
 	"encoding/json"
+	"runtime"
 	"time"
-    "runtime"
 )
 
 //var debug int32 = 1
@@ -224,7 +224,9 @@ func (N *Neuron) calc() {
 		fmt.Printf("%p -> %v -> %v\n", N, val, N.outs)
 		for _, c := range N.outs {
 			go func(c chan<- Signal, val float64) {
+				//fmt.Printf("%p_calc()_pre_send to %p; val=%v\n", N, c, val)
 				c <- Signal{N, val}
+				//fmt.Printf("%p_calc()_post_send to %p; val=%v\n", N, c, val)
 			}(c, val)
 			//c <- Signal{N, val}
 		}
@@ -643,7 +645,7 @@ func main() {
 				continue
 			}
 			if input == 31345 {
-                runtime.GC() // Запустить GarbageCollector.
+				runtime.GC() // Запустить GarbageCollector.
 				continue
 			}
 
