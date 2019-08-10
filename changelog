@@ -1,3 +1,43 @@
+v0.04
+  * NN is array of pointers now (not an array of structs)!
+  * Many simplifications.
+  * All basic mutations are done and tested.
+    - weight_change_random()
+	- synapse_add_random()
+	- N.synapse_del()
+	- NN.Print()
+	- NN.Print_weights()
+	- NN.neuron_del(N)
+	- NN.neuron_del_random()
+	- N.get_random_synapse()
+	- N.synapse_del_random()
+	- NN.synapse_del_random()
+	- NN.neuron_add_random()
+  * NN.Dump(), NN.Load() - serialisation and deserialisation of NN into json.
+  * NNdef_01.sav - first NeurNet for worms_client in json.
+
+ -- Eugeny Sokolov <esokolov@navigo.su>  Thu, 12 May 2019 17:06:53 +0500
+
+
+v0.03
+  * Concepts of basic mutations.
+    - neuron_remove()
+	- neuron_del()
+	- synapse_add_random()
+	- N.weight_change_random()
+	- NN.weight_change_random() - wrapper under N.weight_change_random()
+	- N.get_random_synapse()
+	- N.synapse_del_random()
+	- NN.synapse_del_random()
+	Neurons not actually deleted, just tagged 'deleted' (due to difficulty of
+	reindexing other neurons links). Real removing of neuron cause shifting
+	other neurons and changing their pointers. The root of this problem is
+	that NN is an array of structures (Neurons), not array of pointers to
+	structures.
+
+ -- Eugeny Sokolov <esokolov@navigo.su>  Thu, 12 May 2019 17:06:53 +0500
+
+
 v0.02
 
   * Single chanel for one neuron. All input signals are marked by source
