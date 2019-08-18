@@ -1,4 +1,4 @@
-package main
+package async_brain
 
 // Online POC version
 // https://play.golang.org/p/lA0yztEaOP
@@ -542,6 +542,7 @@ func (NN *NeurNet) Print_weights() {
 	fmt.Printf("\n\n")
 }
 
+/*
 func main() {
 	var NN *NeurNet = nn_random_constructor(1, 3, 1, 3)
 	//NN.Print()
@@ -657,3 +658,4 @@ func main() {
 		}
 	}
 }
+*/
