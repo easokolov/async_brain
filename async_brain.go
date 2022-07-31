@@ -4,16 +4,16 @@ package async_brain
 // https://play.golang.org/p/lA0yztEaOP
 
 import (
-	"bufio"
+	//"bufio"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
-	"strings"
+	//"strconv"
+	//"strings"
 	//"sync" // Mutex
 	"encoding/json"
-	"runtime"
+	//"runtime"
 	"time"
 )
 
