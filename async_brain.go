@@ -239,7 +239,7 @@ func (N *Neuron) calc() {
 /* ---=== Mutation ===--- */
 // Произвольно меняем вес произвольного синапса нейрона N на случайную дельту (от -0.05 до 0.05).
 // В одном случае из 10 дельта увеличиваеся в диапазоне от -0.5 до 0.5
-func (N *Neuron) weight_change_random() {
+func (N *Neuron) Weight_change_random() {
 	index := r.Intn(len(N.weight)) // Выбираем случайный синапс
 	i := 0
 	for n, _ := range N.weight {
@@ -255,25 +255,25 @@ func (N *Neuron) weight_change_random() {
 	}
 }
 
-func (NN *NeurNet) weight_change_random() {
+func (NN *NeurNet) Weight_change_random() {
 	n := NN.Linked[r.Intn(NN.n_linked)] // Weight will be changed for n (random Linked neuron)
-	n.weight_change_random()
+	n.Weight_change_random()
 }
 
-func (NN *NeurNet) synapse_add_random() {
+func (NN *NeurNet) Synapse_add_random() {
 	n := NN.Linked[r.Intn(NN.n_linked)] // Synapse will be added for n (random Linked neuron)
 	if len(n.weight) < NN.max_syn {
 		n_target := NN.Neur[r.Intn(NN.n_neur)]
 		n.link_with(n_target, -3.0+r.Float64()*6.0)
 	} else {
-		out(fmt.Sprintf("Neuron synapses limit is exceeded for %p.", n))
+		Out(fmt.Sprintf("Neuron synapses limit is exceeded for %p.", n))
 	}
 }
 
 // Возвращает указатель на нейрон N2, к которому ведет случайный синапс нейрона N.
-func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
+func (N *Neuron) Get_random_synapse() (N2 *Neuron, err error) {
 	if len(N.weight) == 0 {
-		return nil, fmt.Errorf("get_random_synapse(): Neuron %v doesn't have any synapse", N)
+		return nil, fmt.Errorf("Get_random_synapse(): Neuron %v doesn't have any synapse", N)
 	}
 	index := r.Intn(len(N.weight))
 	i := 0
@@ -287,44 +287,44 @@ func (N *Neuron) get_random_synapse() (N2 *Neuron, err error) {
 }
 
 // У нейрона N удаляем синапс, берущий сигнал у нейрона N2 (по указателю).
-func (N *Neuron) synapse_del(N2 *Neuron) {
+func (N *Neuron) Synapse_del(N2 *Neuron) {
 	delete(N2.outs, N)
 	delete(N.in, N2)
 	delete(N.weight, N2)
 	// Если удаляется последний входящий синапс, то
-	// дернуть neuron_del() должен вызывающий synapse_del()
-	// Т.к. neuron_del() может дергаться и самостоятельно,
-	// и в этом случае он должен вызывать synapse_del().
+	// дернуть Neuron_del() должен вызывающий Synapse_del()
+	// Т.к. Neuron_del() может дергаться и самостоятельно,
+	// и в этом случае он должен вызывать Synapse_del().
 }
 
-func (N *Neuron) synapse_del_random() {
-	N2, err := N.get_random_synapse()
+func (N *Neuron) Synapse_del_random() {
+	N2, err := N.Get_random_synapse()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	N.synapse_del(N2)
-	// Нейрон без связей будет удален в NN.synapse_del_random()
+	N.Synapse_del(N2)
+	// Нейрон без связей будет удален в NN.Synapse_del_random()
 	// т.к. здесь мы не имеем указателя NN
 }
 
-func (NN *NeurNet) synapse_del_random() {
+func (NN *NeurNet) Synapse_del_random() {
 	if NN.n_linked == 0 {
-		panic("synapse_del_random(): we have no linked neurons.")
+		panic("Synapse_del_random(): we have no linked neurons.")
 	}
 	N := NN.Linked[r.Intn(NN.n_linked)] // Synapse will be deleted for N (random Linked neuron)
-	N.synapse_del_random()
+	N.Synapse_del_random()
 	// Если это внутренний нейрон и у него не осталось синапсов, то удаляем его (но не выходной)
 	if len(N.weight) == 0 {
-		if NN.get_index(N) < NN.n_in+NN.n_int {
-			NN.neuron_del(N)
+		if NN.Get_index(N) < NN.n_in+NN.n_int {
+			NN.Neuron_del(N)
 		}
 	}
 }
 
 // /*
 
-func (NN *NeurNet) neuron_add_random() {
+func (NN *NeurNet) Neuron_add_random() {
 	//Должно строиться на основе NN.Neur = append(NN.Neur, new(Neuron))
 	//только со смещением Out-нейронов в конец и переопределением слайсов Int, Out, Linked
 	NN.Neur = append(NN.Neur, nil)
@@ -332,9 +332,9 @@ func (NN *NeurNet) neuron_add_random() {
 	NN.set_slices(NN.n_in, NN.n_int+1, NN.n_out)
 	ncopy := copy(NN.Neur[NN.n_neur-NN.n_out:NN.n_neur], NN.Neur[NN.n_neur-NN.n_out-1:NN.n_neur-1])
 	if ncopy == NN.n_out {
-		//out(fmt.Sprintf("!!! OK! NN.n_out (%v) neurons copied.", NN.n_out))
+		//Out(fmt.Sprintf("!!! OK! NN.n_out (%v) neurons copied.", NN.n_out))
 	} else {
-		out(fmt.Sprintf("!!! BAD! %v neurons copied. (!= NN.n_out (%v)).", ncopy, NN.n_out))
+		Out(fmt.Sprintf("!!! BAD! %v neurons copied. (!= NN.n_out (%v)).", ncopy, NN.n_out))
 	}
 	// Переопределяем последний int-нейрон (создаем новый)
 	newi := NN.n_in + NN.n_int - 1 // index of new internal newron.
@@ -348,41 +348,32 @@ func (NN *NeurNet) neuron_add_random() {
 		NN.Neur[newi].link_with(NN.Neur[r.Intn(NN.n_neur)], -3.0+r.Float64()*6.0)
 	}
 	NN.Linked[r.Intn(NN.n_linked)].link_with(NN.Neur[newi], -3.0+r.Float64()*6.0) // Создаем для рэндомного Linked-нейрона синапс на новый нейрон.
-	out(fmt.Sprintf("Random neuron added. %v in-, %v internal-, %v out- neurons now.", NN.n_in, NN.n_int, NN.n_out))
+	Out(fmt.Sprintf("Random neuron added. %v in-, %v internal-, %v out- neurons now.", NN.n_in, NN.n_int, NN.n_out))
 }
-
-// func (NN *NeurNet) dump(finlename str) {
-//
-// }
-//
-// func (NN *NeurNet) load(filename str) {
-//
-// }
-// */
 
 // Удалить случайный внутренний нейрон.
-func (NN *NeurNet) neuron_del_random() {
-	NN.neuron_del(NN.Int[r.Intn(NN.n_int)])
+func (NN *NeurNet) Neuron_del_random() {
+	NN.Neuron_del(NN.Int[r.Intn(NN.n_int)])
 }
 
-// при удалении нейрона надо удалить все синапсы, если они есть, погасить N.listen(),
+// при удалении нейрона надо удалить все синапсы, если они есть, погасить N.Listen(),
 // Закрыть канал N.in_ch и освободить память от него и от всего нейрона.
-// Чтобы погасить горутину N.listen() будем посылать спецзначение 31337
+// Чтобы погасить горутину N.Listen() будем посылать спецзначение 31337
 // (чтобы не создавать отдельный управляющий сигнал).
-func (NN *NeurNet) neuron_del(N *Neuron) {
-	out(fmt.Sprintf("Neuron %p would be stopped!", N))
+func (NN *NeurNet) Neuron_del(N *Neuron) {
+	Out(fmt.Sprintf("Neuron %p would be stopped!", N))
 	// If there is something in N.in or N.outs, we should itterate it and remove synapses.
 	for n, _ := range N.weight {
-		N.synapse_del(n)
+		N.Synapse_del(n)
 	}
 	for n, _ := range N.outs {
-		n.synapse_del(N)
+		n.Synapse_del(N)
 		// Если это был единственный синапс у n (некий нейрон, бурещий сигнал у N),
 		// то такой нейрон можно удалить. Но не стоит каскадно удалять входные и выходные нейроны.
 		if len(n.weight) == 0 {
-			ind := NN.get_index(n)
+			ind := NN.Get_index(n)
 			if ind >= NN.n_in && ind < NN.n_in+NN.n_int {
-				NN.neuron_del(n)
+				NN.Neuron_del(n)
 			}
 		}
 	}
@@ -399,9 +390,9 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 		close(N.in_ch)
 	}
 
-	index := NN.get_index(N)
+	index := NN.Get_index(N)
 	if index < 0 {
-		out(fmt.Sprintf("Neuron %p not in NN.Neur", N))
+		Out(fmt.Sprintf("Neuron %p not in NN.Neur", N))
 		return
 	} else if index < NN.n_in {
 		NN.Neur = remove(NN.Neur, index)
@@ -413,13 +404,13 @@ func (NN *NeurNet) neuron_del(N *Neuron) {
 		NN.Neur = remove(NN.Neur, index)
 		NN.set_slices(NN.n_in, NN.n_int, NN.n_out-1)
 	} else {
-		out(fmt.Sprintf("index %v of neuron %p out of NN.Neur!!! Imposible!!!", index, N))
+		Out(fmt.Sprintf("index %v of neuron %p out of NN.Neur!!! Imposible!!!", index, N))
 		return
 	}
 }
 
 // Returns index of N in NN.Neur or -1 if not found.
-func (NN *NeurNet) get_index(N *Neuron) int {
+func (NN *NeurNet) Get_index(N *Neuron) int {
 	for i, n := range NN.Neur {
 		if N == n {
 			return (i)
@@ -432,15 +423,15 @@ func (NN *NeurNet) get_index(N *Neuron) int {
 // Then goes unblocking select, which gets other Signals if they are already in queue.
 // If queue is empty (select default), then we do calc().
 // receive() just doing every select must to do (for reducing the code).
-func (NN *NeurNet) listen(N *Neuron) {
-	defer out(fmt.Sprintf("%p.listen() closed!", N))
-	// if receive() returns false, then listen() should be exit too.
+func (NN *NeurNet) Listen(N *Neuron) {
+	defer Out(fmt.Sprintf("%p.Listen() closed!", N))
+	// if receive() returns false, then Listen() should be exit too.
 	receive := func(N *Neuron, sig Signal) bool {
 		if sig.val == 31337 && sig.source == nil {
-			return (false) // Выход из listen()
+			return (false) // Выход из Listen()
 		}
 		N.in[sig.source] = sig.val
-		return (true) // Продолжить listen()
+		return (true) // Продолжить Listen()
 	}
 
 	for {
@@ -475,7 +466,7 @@ func (NN *NeurNet) set_slices(n_in, n_int, n_out int) {
 	NN.Linked = NN.Neur[n_in:]
 }
 
-func nn_random_constructor(n_in, n_int, n_out, max_syn int) *NeurNet {
+func NN_random_constructor(n_in, n_int, n_out, max_syn int) *NeurNet {
 	var NN NeurNet
 	NN.max_syn = max_syn
 	NN.n_neur = n_in + n_int + n_out
@@ -503,7 +494,7 @@ func nn_random_constructor(n_in, n_int, n_out, max_syn int) *NeurNet {
 
 //FIXME
 // Hook for logging purposes
-func out(s string) {
+func Out(s string) {
 	fmt.Println(s)
 }
 
@@ -544,18 +535,18 @@ func (NN *NeurNet) Print_weights() {
 
 /*
 func main() {
-	var NN *NeurNet = nn_random_constructor(1, 3, 1, 3)
+	var NN *NeurNet = NN_random_constructor(1, 3, 1, 3)
 	//NN.Print()
 
 	// !!! Пока NN.Neur был массив структур, а не массив указателей, то делая 'for _,n := range NN.Linked', в n была копия нейрона.
 	// Работа.
 	for _, n := range NN.Linked {
-		go NN.listen(n)
+		go NN.Listen(n)
 	}
 
 	// Входные нейроны теперь тоже имеют входной канал.
 	for _, n := range NN.In {
-		go NN.listen(n)
+		go NN.Listen(n)
 	}
 
 	// Запуск
@@ -567,7 +558,7 @@ func main() {
 
 	// Читаем клаву. Ждем команд или входов в n0
 	for {
-		//out("000")
+		//Out("000")
 		n0 = NN.In[0]
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter command or input for n0: ")
@@ -590,7 +581,7 @@ func main() {
 		input, err := strconv.ParseFloat(strings.Split(text, "\n")[0], 64)
 		if err == nil {
 			if input == 31337 {
-				NN.neuron_del_random()
+				NN.Neuron_del_random()
 				continue
 			}
 			if input == 31338 {
@@ -598,17 +589,17 @@ func main() {
 				continue
 			}
 			if input == 31339 {
-				NN.weight_change_random()
+				NN.Weight_change_random()
 				continue
 			}
 			if input == 31340 {
-				NN.synapse_del_random()
-				//(&NN).Int[0].synapse_del(NN.In[0])
-				//(&NN).Int[0].synapse_del(NN.Int[0])
+				NN.Synapse_del_random()
+				//(&NN).Int[0].Synapse_del(NN.In[0])
+				//(&NN).Int[0].Synapse_del(NN.Int[0])
 				continue
 			}
 			if input == 31341 {
-				NN.neuron_add_random()
+				NN.Neuron_add_random()
 				continue
 			}
 			if input == 31342 {
@@ -626,7 +617,7 @@ func main() {
 				NN = new(NeurNet)
 				NN.Load("1")
 				for _, n := range NN.Neur {
-					go NN.listen(n)
+					go NN.Listen(n)
 				}
 				continue
 			}
@@ -641,7 +632,7 @@ func main() {
 				NN = new(NeurNet)
 				NN.Load("2")
 				for _, n := range NN.Neur {
-					go NN.listen(n)
+					go NN.Listen(n)
 				}
 				continue
 			}
